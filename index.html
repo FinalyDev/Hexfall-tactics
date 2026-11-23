@@ -76,6 +76,16 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
 #sellZone.show{display:flex}
 #sellZone.hot{background:rgba(240,60,80,.97)}
 .hidden{display:none!important}
+#bag{display:flex;align-items:center;gap:6px;padding:5px 6px;background:#1a1826;border-top:1px solid var(--line)}
+.bagl{font-size:20px;flex:0 0 auto;display:flex;flex-direction:column;align-items:center;line-height:1;width:28px}.bagl b{font-size:11px;color:var(--muted);margin-top:2px}
+#bagItems{display:flex;gap:6px;overflow-x:auto;flex:1;min-height:46px;align-items:center;scrollbar-width:none}
+#bagItems::-webkit-scrollbar{display:none}
+.bagitem{flex:0 0 auto;width:46px;height:46px;border-radius:10px;background:var(--panel2);border:2px solid #7a74a8;font-size:24px;display:flex;align-items:center;justify-content:center;touch-action:pan-x;padding:0}
+.bagitem.done{border-color:#ffc94a;background:#4a3a15;font-size:16px;letter-spacing:-2px}
+.bagitem.hot{border-color:#fff;background:#4a4580;transform:scale(1.1)}
+.bagitem.lift{opacity:.3}
+.bagempty{color:var(--muted);font-size:12px;line-height:1.3}
+#ghost{position:fixed;z-index:50;width:52px;height:52px;margin:-60px 0 0 -26px;border-radius:12px;border:2px solid #ffc94a;background:#4a3a15ee;display:flex;align-items:center;justify-content:center;font-size:24px;pointer-events:none;box-shadow:0 6px 16px #000a}
 #augScreen{background:rgba(10,8,20,.94);justify-content:center!important;z-index:35}
 #augScreen h2{margin:0 0 4px;font-size:26px}
 #augCards{display:flex;flex-direction:column;gap:10px;width:100%;max-width:440px;margin:8px 0 12px}
@@ -104,7 +114,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
 .chip{display:inline-block;font-size:12px;padding:2px 7px;border-radius:10px;background:var(--panel2);margin:2px 4px 2px 0}
 .itm{font-size:13px;margin:3px 0}
 #banner{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);background:#000c;padding:16px 26px;border-radius:16px;font-size:26px;font-weight:900;text-align:center;z-index:15;pointer-events:none;border:2px solid var(--line)}
-#banner small{display:block;font-size:14px;font-weight:600;color:var(--muted);margin-top:4px}
+#banner small{display:block;font-size:14px;max-width:80vw;line-height:1.4;font-weight:600;color:var(--muted);margin-top:4px}
 #toast{position:fixed;left:50%;top:28%;transform:translateX(-50%);background:#000d;padding:8px 14px;border-radius:10px;font-size:13px;z-index:30;pointer-events:none;max-width:90vw;text-align:center}
 .screen{position:fixed;inset:0;background:radial-gradient(circle at 50% 20%,#2e2650,var(--bg) 70%);justify-content:flex-start!important;z-index:40;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;overflow:auto}
 .screen h1{font-size:40px;margin:0;letter-spacing:1px;background:linear-gradient(#ffd77a,#ff7a45);-webkit-background-clip:text;background-clip:text;color:transparent}
@@ -127,6 +137,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
   <div id="players"></div>
   <div id="traits"></div>
   <div id="stage"><canvas id="cv"></canvas></div>
+  <div id="bag"><span class="bagl">🎒<b id="bagN">0</b></span><div id="bagItems"></div></div>
   <div id="shopWrap">
     <div id="shopBar">
       <div id="lvlBox"><div>Level <b id="lvl">1</b> · <span id="unitsLbl">0/1 units</span></div><div class="xpbar"><div id="xpFill"></div></div><small id="xpLbl"></small></div>
@@ -141,6 +152,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
 <div id="sheet" class="hidden"></div>
 <div id="banner" class="hidden"></div>
 <div id="toast" class="hidden"></div>
+<div id="ghost" class="hidden"></div>
 
 <div id="title" class="screen">
   <h1>HEXFALL<br>TACTICS</h1>
@@ -158,7 +170,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
     • Every unit has an <b>origin</b> and a <b>class</b>. Field 2 or 4 different units of a trait to unlock its bonus. Each set has its own traits.<br>
     • <b>Assassins</b> (sets 2–4) leap onto the enemy back line when the fight starts.<br>
     • Your <b>level</b> = how many units can fight. Every 10 gold you hold earns +1 interest (max 5).<br>
-    • Monster rounds drop <b>item parts</b>. Drag one part onto another in your bag (or tap it) to craft a full item, then drag it onto a unit.<br>
+    • Monster rounds drop <b>units, gold and item parts</b> (shown in your 🎒 bag above the shop). Drag one part onto another in your bag (or tap it) to craft a full item, then drag it onto a unit.<br>
     • At <b>2-1, 3-2 and 4-2</b> you pick an <b>augment</b> card — a Silver, Gold or Prismatic power-up for the rest of the game.<br>
     • Drag a unit onto the shop to <b>sell</b> it. Tap anything to see its stats.<br>
     • Lose a fight and you lose HP. Be the last one standing!
@@ -1245,16 +1257,32 @@ function startCombat() {
   sfx('start');
   updateUI();
 }
+function grantLoot(o, won) {
+  const st = state.stage, rd = state.round, out = [];
+  const part = () => { const k = pick(COMP_KEYS); o.items.push(k); out.push(`${COMP[k].icon} ${COMP[k].name}`); };
+  const gold = n => { o.gold += n; out.push(`🪙 +${n}`); };
+  const unit = cost => {
+    const id = pickFromPool(cost); if (!id) return;
+    if (canTake(o, id)) { giveUnit(o, id); out.push(`🧑 ${UNIT[id].name}`); } else gold(UNIT[id].cost);
+  };
+  if (!won) { part(); return out; }
+  if (st === 1) {
+    if (rd === 1) { unit(1); part(); }
+    else if (rd === 2) { unit(1); unit(1); if (Math.random() < .5) part(); else gold(2); }
+    else { unit(2); part(); gold(2); }
+  } else { part(); part(); gold(3); if (Math.random() < .5) unit(Math.min(st, 4)); }
+  return out;
+}
 function dropItems(o, n) { for (let i = 0; i < n; i++) o.items.push(pick(COMP_KEYS)); }
 function endCombat() {
   const p = state.player, S = sim, stage = state.stage;
   let title = '', sub = '', color = '#fff';
   const won = S.winner === 0;
   if (S.kind === 'pve') {
-    const n = stage === 1 ? 1 : 2;
-    if (won) { dropItems(p, n); if (stage > 1 || state.round === 3) p.gold += stage === 1 ? 2 : 3; title = 'Cleared!'; sub = `Loot: +${n} item part${n > 1 ? 's' : ''}`; color = '#5dff9a'; }
-    else { const dmg = stage === 1 ? 0 : 2 + survivorsScore(S, 1); p.hp -= dmg; dropItems(p, 1); title = 'Defeated'; sub = (dmg ? `-${dmg} HP · ` : '') + '+1 item part'; color = '#ff6b7a'; }
-    state.bots.forEach(b => { if (b.alive) { dropItems(b, n); if (stage > 1) b.gold += 3; } });
+    const loot = grantLoot(p, won);
+    if (won) { title = 'Cleared!'; sub = 'Loot: ' + loot.join(' · '); color = '#5dff9a'; }
+    else { const dmg = stage === 1 ? 0 : 2 + survivorsScore(S, 1); p.hp -= dmg; title = 'Defeated'; sub = (dmg ? `-${dmg} HP · ` : '') + 'Loot: ' + loot.join(' · '); color = '#ff6b7a'; }
+    state.bots.forEach(b => { if (b.alive) { grantLoot(b, true); botArrange(b); } });
   } else {
     const opp = state.bots[state.opp];
     p.lastOpp = state.opp;
@@ -1347,7 +1375,7 @@ function updateUI() {
   if (!state) return;
   const p = state.player, plan = state.phase === 'plan' && !transition;
   $('stageLbl').textContent = `Stage ${state.stage}-${state.round}`;
-  $('oppLbl').textContent = roundType() === 'pve' ? (state.stage === 1 ? 'Monsters (item drops)' : 'Monster round (item drops)') : `vs ${state.bots[state.opp]?.name || '?'}`;
+  $('oppLbl').textContent = roundType() === 'pve' ? (state.stage === 1 ? 'Monsters (unit & item drops)' : 'Monster round (loot drops)') : `vs ${state.bots[state.opp]?.name || '?'}`;
   $('hpLbl').textContent = '❤ ' + Math.max(0, p.hp);
   $('goldLbl').textContent = '🪙 ' + p.gold;
   const fb = $('fightBtn');
@@ -1382,6 +1410,7 @@ function updateUI() {
     b.onclick = () => { if (buyUnit(p, i)) { sfx('buy'); if (p.combined) { toast(`${UNIT[id].name} ranked up! ⭐`); p.combined = 0; } updateUI(); save(); } };
     shop.appendChild(b);
   });
+  renderBag();
   // traits
   const tw = $('traits'); tw.innerHTML = '';
   const units = state.phase === 'combat' && sim ? Object.values(p.board) : Object.values(p.board);
@@ -1413,6 +1442,40 @@ function updateUI() {
     pl.appendChild(d);
   });
 }
+
+/* --- item bag (DOM, always visible) --- */
+function renderBag() {
+  const p = state.player, box = $('bagItems'); box.innerHTML = '';
+  $('bagN').textContent = p.items.length;
+  if (!p.items.length) { box.innerHTML = '<span class="bagempty">No items yet — win monster rounds for loot. Drag items onto units; drop one part on another to craft.</span>'; return; }
+  p.items.forEach((it, i) => {
+    const b = document.createElement('button');
+    b.className = 'bagitem' + (isComplete(it) ? ' done' : ''); b.dataset.i = i; b.textContent = itemIcon(it); b.title = itemName(it);
+    b.addEventListener('pointerdown', e => {
+      if (!state || state.phase === 'over' || transition) return;
+      const q = ptr(e);
+      drag = { hit: { t: 'item', i }, sx: q.x, sy: q.y, x: q.x, y: q.y, moved: false, dom: true, scx: e.clientX, scy: e.clientY, cx: e.clientX, cy: e.clientY, el: b };
+    });
+    box.appendChild(b);
+  });
+}
+function hideGhost() { $('ghost').classList.add('hidden'); document.querySelectorAll('.bagitem.hot,.bagitem.lift').forEach(x => x.classList.remove('hot', 'lift')); }
+window.addEventListener('pointermove', e => {
+  if (!drag || !drag.dom) return;
+  const q = ptr(e); drag.x = q.x; drag.y = q.y; drag.cx = e.clientX; drag.cy = e.clientY;
+  if (!drag.moved && Math.hypot(e.clientX - drag.scx, e.clientY - drag.scy) > 8) {
+    drag.moved = true; closeSheet(); drag.el.classList.add('lift');
+    const g = $('ghost'); g.textContent = itemIcon(state.player.items[drag.hit.i]); g.classList.remove('hidden');
+  }
+  if (drag.moved) {
+    const g = $('ghost'); g.style.left = e.clientX + 'px'; g.style.top = e.clientY + 'px';
+    const j = bagIndexAt(e.clientX, e.clientY);
+    document.querySelectorAll('.bagitem.hot').forEach(x => x.classList.remove('hot'));
+    if (j >= 0 && j !== drag.hit.i) { const t = document.querySelector(`.bagitem[data-i="${j}"]`); if (t && !t.classList.contains('done') && !isComplete(state.player.items[drag.hit.i])) t.classList.add('hot'); }
+  }
+});
+window.addEventListener('pointerup', e => { if (drag && drag.dom) endDrag(e); });
+window.addEventListener('pointercancel', () => { if (drag && drag.dom) { drag = null; hideGhost(); } });
 
 /* --- info sheet --- */
 function closeSheet() { $('sheet').classList.add('hidden'); }
@@ -1478,8 +1541,8 @@ function resize() {
   const st = $('stage'); const W = st.clientWidth, H = st.clientHeight;
   DPR = Math.min(window.devicePixelRatio || 1, 2.5);
   cv.width = W * DPR; cv.height = H * DPR; cv.style.width = W + 'px'; cv.style.height = H + 'px';
-  const s = Math.max(10, Math.min(W / (SQ3 * 7.5 + .2), (H - 8) / 16.4));
-  const boardW = SQ3 * s * 7.5, ox = (W - boardW) / 2, oy = Math.max(4, (H - 16.2 * s) / 2);
+  const s = Math.max(10, Math.min(W / (SQ3 * 7.5 + .2), (H - 8) / 14.9));
+  const boardW = SQ3 * s * 7.5, ox = (W - boardW) / 2, oy = Math.max(4, (H - 14.8 * s) / 2);
   const slot = Math.min(W / 9, s * 1.85), benchX0 = (W - slot * 9) / 2, benchY = oy + 12.5 * s + .35 * s;
   const itemSize = Math.min(W / 10, s * 1.2), itemY = benchY + slot + .2 * s;
   L = { W, H, s, ox, oy, slot, benchX0, benchY, itemSize, itemY, itemCols: Math.floor(W / itemSize) };
@@ -1529,7 +1592,7 @@ function drawUnitBody(x, y, rad, o) {
     if (o.manaFrac !== undefined) { ctx.fillStyle = '#4aa8ff'; ctx.fillRect(bx, by + bh + 1, bw * o.manaFrac, bh * .6); }
   }
   if (o.items && o.items.length) {
-    const sz = rad * .58, tot = o.items.length * sz;
+    const sz = Math.max(11, rad * .72), tot = o.items.length * sz;
     o.items.forEach((it, i) => { const ix = x - tot / 2 + i * sz, iy = y + rad * .95; ctx.fillStyle = isComplete(it) ? '#5a4515' : '#2a2640'; ctx.fillRect(ix, iy, sz - 1, sz - 1); ctx.strokeStyle = isComplete(it) ? '#ffc94a' : '#777'; ctx.lineWidth = 1; ctx.strokeRect(ix, iy, sz - 1, sz - 1); ctx.font = `${sz * (isComplete(it) ? .42 : .7)}px system-ui`; ctx.fillStyle = '#fff'; ctx.fillText(isComplete(it) ? itemIcon(it) : COMP[it].icon, ix + sz / 2, iy + sz / 2 + 1); });
   }
   ctx.restore();
@@ -1548,7 +1611,7 @@ function draw() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.clearRect(0, 0, L.W, L.H);
   const s = L.s, p = state.player, plan = state.phase === 'plan';
-  const hover = drag && drag.moved ? dropTarget(drag.x, drag.y, drag.hit) : null;
+  const hover = drag && drag.moved ? dropTarget(drag.x, drag.y, drag.hit, drag.cx, drag.cy) : null;
   // board
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
     const { x, y } = cell(r, c);
@@ -1597,7 +1660,7 @@ function draw() {
     }
     if (plan && roundType() === 'pvp' && state.opp >= 0) {
       ctx.fillStyle = '#ffffff40'; ctx.font = `600 ${s * .45}px system-ui`; ctx.textAlign = 'center'; ctx.fillText(`Next: ${state.bots[state.opp].name} (tap their name above to scout)`, L.W / 2, cell(1, 3).y + s * .7);
-    } else if (plan) { ctx.fillStyle = '#ffffff40'; ctx.font = `600 ${s * .45}px system-ui`; ctx.textAlign = 'center'; ctx.fillText('Monster round — win to earn item parts', L.W / 2, cell(1, 3).y + s * .7); }
+    } else if (plan) { ctx.fillStyle = '#ffffff40'; ctx.font = `600 ${s * .45}px system-ui`; ctx.textAlign = 'center'; ctx.fillText('Monster round — win for units, gold & items', L.W / 2, cell(1, 3).y + s * .7); }
   }
   // bench
   for (let i = 0; i < 9; i++) {
@@ -1607,22 +1670,9 @@ function draw() {
     const u = p.bench[i];
     if (u && !(dragging && dragging.t === 'bench' && dragging.i === i)) drawUnitBody(x, y + L.slot * .06, Math.min(rad, L.slot * .33), unitLook(u, { highlight: hover && hover.t === 'unit' && hover.u === u }));
   }
-  // items
-  const shown = Math.min(p.items.length, L.itemCols, 10);
-  if (!p.items.length) { ctx.fillStyle = '#ffffff30'; ctx.font = `600 ${s * .38}px system-ui`; ctx.textAlign = 'center'; ctx.fillText('Item parts from monster rounds appear here', L.W / 2, L.itemY + L.itemSize / 2); }
-  for (let i = 0; i < shown; i++) {
-    if (dragging && dragging.t === 'item' && dragging.i === i) continue;
-    const it = p.items[i], { x, y } = itemPos(i), sz = L.itemSize * .86;
-    ctx.fillStyle = isComplete(it) ? '#5a4515' : '#2a2640'; ctx.strokeStyle = isComplete(it) ? '#ffc94a' : '#5a5480'; ctx.lineWidth = 1.5;
-    if (hover && hover.t === 'bagItem' && hover.i === i) { ctx.fillStyle = '#4a4580'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; }
-    roundRect(x - sz / 2, y - sz / 2, sz, sz, 6); ctx.fill(); ctx.stroke();
-    ctx.font = `${sz * (isComplete(it) ? .36 : .6)}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff'; ctx.fillText(itemIcon(it), x, y + 1);
-  }
-  if (p.items.length > shown) { ctx.fillStyle = '#fff8'; ctx.font = `700 ${s * .4}px system-ui`; ctx.fillText(`+${p.items.length - shown}`, itemPos(shown - 1).x + L.itemSize * .5, L.itemY + 6); }
   // dragged thing
   if (dragging) {
-    if (dragging.t === 'item') { const it = p.items[dragging.i]; const sz = L.itemSize; ctx.fillStyle = '#5a4515'; roundRect(drag.x - sz / 2, drag.y - sz / 2, sz, sz, 6); ctx.fill(); ctx.font = `${sz * .55}px system-ui`; ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(itemIcon(it), drag.x, drag.y); }
-    else { const u = getAt(p, dragging.t === 'board' ? { t: 'board', k: dragging.k } : { t: 'bench', i: dragging.i }); if (u) drawUnitBody(drag.x, drag.y - s * .4, rad * 1.1, unitLook(u, { alpha: .9 })); }
+    if (dragging.t !== 'item') { const u = getAt(p, dragging.t === 'board' ? { t: 'board', k: dragging.k } : { t: 'bench', i: dragging.i }); if (u) drawUnitBody(drag.x, drag.y - s * .4, rad * 1.1, unitLook(u, { alpha: .9 })); }
   }
 }
 function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
@@ -1630,11 +1680,11 @@ function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.a
 /* ================= INPUT ================= */
 function hexAt(x, y) { let best = null, bd = L.s * .95; for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { const p = cell(r, c), d = Math.hypot(p.x - x, p.y - y); if (d < bd) { bd = d; best = { r, c }; } } return best; }
 function benchAt(x, y) { if (y < L.benchY || y > L.benchY + L.slot) return -1; const i = Math.floor((x - L.benchX0) / L.slot); return i >= 0 && i < 9 ? i : -1; }
+function bagIndexAt(cx, cy) { if (cx == null) return -1; const el = document.elementFromPoint(cx, cy); const b = el && el.closest && el.closest('.bagitem'); return b ? +b.dataset.i : -1; }
 function itemAt(x, y) { if (y < L.itemY || y > L.itemY + L.itemSize) return -1; for (let i = 0; i < Math.min(state.player.items.length, L.itemCols, 10); i++) { const p = itemPos(i); if (Math.abs(p.x - x) < L.itemSize / 2) return i; } return -1; }
 function hitTest(x, y) {
   const p = state.player;
   const bi = benchAt(x, y); if (bi >= 0 && p.bench[bi]) return { t: 'bench', i: bi };
-  const ii = itemAt(x, y); if (ii >= 0) return { t: 'item', i: ii };
   const h = hexAt(x, y); if (!h) return null;
   if (state.phase === 'combat' && sim) {
     let best = null, bd = L.s; for (const f of sim.fighters) { if (!f.alive) continue; const q = fighterPos(f), d = Math.hypot(q.x - x, q.y - y); if (d < bd) { bd = d; best = f; } }
@@ -1643,10 +1693,10 @@ function hitTest(x, y) {
   const k = key(h.r, h.c); if (p.board[k]) return { t: 'board', k };
   return null;
 }
-function dropTarget(x, y, hit) {
+function dropTarget(x, y, hit, cx, cy) {
   const p = state.player;
   if (hit.t === 'item') {
-    const ii = itemAt(x, y); if (ii >= 0 && ii !== hit.i && !isComplete(p.items[ii]) && !isComplete(p.items[hit.i])) return { t: 'bagItem', i: ii };
+    const ii = bagIndexAt(cx, cy); if (ii >= 0 && ii !== hit.i && !isComplete(p.items[ii]) && !isComplete(p.items[hit.i])) return { t: 'bagItem', i: ii };
     const bi = benchAt(x, y); if (bi >= 0 && p.bench[bi]) return { t: 'unit', u: p.bench[bi] };
     const h = hexAt(x, y); if (h && state.phase === 'plan' && p.board[key(h.r, h.c)]) return { t: 'unit', u: p.board[key(h.r, h.c)] };
     return null;
@@ -1668,11 +1718,11 @@ cv.addEventListener('pointerdown', e => {
   const p = ptr(e), hit = hitTest(p.x, p.y);
   if (!hit) { closeSheet(); return; }
   cv.setPointerCapture(e.pointerId);
-  drag = { hit, sx: p.x, sy: p.y, x: p.x, y: p.y, moved: false };
+  drag = { hit, sx: p.x, sy: p.y, x: p.x, y: p.y, moved: false, cx: e.clientX, cy: e.clientY };
 });
 cv.addEventListener('pointermove', e => {
-  if (!drag) return;
-  const p = ptr(e); drag.x = p.x; drag.y = p.y;
+  if (!drag || drag.dom) return;
+  const p = ptr(e); drag.x = p.x; drag.y = p.y; drag.cx = e.clientX; drag.cy = e.clientY;
   if (!drag.moved && Math.hypot(p.x - drag.sx, p.y - drag.sy) > 8 && canDrag(drag.hit)) {
     drag.moved = true; closeSheet();
     if (drag.hit.t !== 'item') { const u = locUnit(drag.hit); const z = $('sellZone'); z.textContent = `Drop here to sell for ${sellValue(u)} 🪙`; z.classList.add('show'); }
@@ -1683,11 +1733,11 @@ function locOf(hit) { return hit.t === 'board' ? { t: 'board', k: hit.k } : { t:
 function locUnit(hit) { return getAt(state.player, locOf(hit)); }
 function endDrag(e) {
   if (!drag) return;
-  const d = drag; drag = null; $('sellZone').classList.remove('show', 'hot');
+  const d = drag; drag = null; $('sellZone').classList.remove('show', 'hot'); hideGhost();
   const p = state.player;
   if (!d.moved) { onTap(d.hit); return; }
   if (d.hit.t === 'item') {
-    const tgt = dropTarget(d.x, d.y, d.hit);
+    const tgt = dropTarget(d.x, d.y, d.hit, d.cx, d.cy);
     if (tgt && tgt.t === 'bagItem') { combineInBag(d.hit.i, tgt.i); return; }
     if (tgt && tgt.t === 'unit') {
       const it = p.items[d.hit.i];
@@ -1705,7 +1755,7 @@ function endDrag(e) {
   setAt(p, from, b); setAt(p, tgt, a);
   sfx('place'); updateUI(); save();
 }
-cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointerup', e => { if (drag && !drag.dom) endDrag(e); });
 cv.addEventListener('pointercancel', () => { drag = null; $('sellZone').classList.remove('show', 'hot'); });
 function onTap(hit) {
   const p = state.player;
