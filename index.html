@@ -897,7 +897,9 @@ function pickFromPool(cost) {
   return null;
 }
 function rollCost(level) { const o = ODDS[level]; let x = Math.random() * 100; for (let i = 0; i < 5; i++) { x -= o[i]; if (x < 0) return i + 1; } return 1; }
-function rollShop(o) { o.shop = [0, 0, 0, 0, 0].map(() => pickFromPool(rollCost(o.level))); }
+function anyFromPool() { const opts = UNITS.filter(u => state.pool[u.id] > 0); return opts.length ? pick(opts).id : null; }
+function shopPick(o) { return pickFromPool(rollCost(o.level)) || anyFromPool(); }
+function rollShop(o) { o.shop = [0, 0, 0, 0, 0].map(() => shopPick(o)); }
 
 function allUnits(o) {
   const out = [];
@@ -1366,6 +1368,7 @@ function beginPlan(first) {
       else { rollShop(o); botTurn(o); }
     }
     if (!p.locked) rollShop(p);
+    else { p.shop = p.shop.map(id => id || shopPick(p)); p.locked = false; p.usedLock = true; }
   }
   owners().forEach(o => o.freeRolls = ecoOf(o, 'freeRoll'));
   const tier = AUG_ROUNDS[state.stage + '-' + state.round];
@@ -1382,7 +1385,8 @@ function beginPlan(first) {
   state.phase = 'plan';
   save();
   updateUI();
-  if (!first && p.lastIncome) toast(`+${p.lastIncome} gold`);
+  if (!first && p.lastIncome) toast(p.usedLock ? `+${p.lastIncome} gold · locked shop kept (empty slots refilled, lock released)` : `+${p.lastIncome} gold`);
+  p.usedLock = false;
   if (state.augOffer) setTimeout(showAugPicker, 350);
 }
 function autofill(o) {
@@ -1952,7 +1956,7 @@ $('fightBtn').onclick = () => {
 };
 $('rerollBtn').onclick = () => { const p = state.player; if (state.phase !== 'plan') return; if (p.freeRolls > 0) p.freeRolls--; else if (p.gold >= 2) p.gold -= 2; else return; rollShop(p); sfx('roll'); updateUI(); save(); };
 $('xpBtn').onclick = () => { const p = state.player; if (state.phase !== 'plan') return; const lv = p.level; if (buyXp(p)) { sfx(p.level > lv ? 'star' : 'buy'); if (p.level > lv) toast(`Level ${p.level}! You can field ${p.level} units.`); updateUI(); save(); } };
-$('lockBtn').onclick = () => { const p = state.player; p.locked = !p.locked; toast(p.locked ? 'Shop locked for next round' : 'Shop unlocked'); updateUI(); save(); };
+$('lockBtn').onclick = () => { const p = state.player; p.locked = !p.locked; toast(p.locked ? 'Shop locked: these units stay for next round (empty slots refill)' : 'Shop unlocked: 5 fresh units next round'); updateUI(); save(); };
 window.addEventListener('keydown', e => {
   if (!state || state.phase === 'over' || !$('title').classList.contains('hidden')) return;
   if (e.key === 'd' || e.key === 'D') $('rerollBtn').click();
