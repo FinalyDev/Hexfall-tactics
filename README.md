@@ -1,5 +1,7 @@
 # Hexfall Tactics
 
+Now with a **3D arena**: a tilted camera over a raised hex battlefield with lit tiles, depth-scaled heroes, arcing projectiles and ground-level effects.
+
 An offline, single-player auto-battler that runs in your browser. Draft units from a shop, combine 3 copies to rank them up, stack traits, build items from monster drops, and outlast 7 AI rivals.
 
 - Works offline once loaded (installable as an app: "Add to Home Screen").

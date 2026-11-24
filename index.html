@@ -2032,27 +2032,100 @@ function openSheet(h) { const s = $('sheet'); s.innerHTML = h; s.classList.remov
 
 /* ================= LAYOUT & RENDER ================= */
 let DPR = 1;
+/* ---------- 3D camera ---------- */
+const CAM = { pitch: 58 * Math.PI / 180, back: 4.2, height: 13.5 };
+const TILE_H = .42;
+function rawProj(X, Y, Z) {
+  const py = Y + CAM.back, pz = Z - CAM.height, cp = Math.cos(CAM.pitch), sp = Math.sin(CAM.pitch);
+  const zc = py * cp - pz * sp, yc = py * sp + pz * cp;
+  return { x: X / zc, y: -yc / zc, k: 1 / zc };
+}
+function worldOf(r, c) { return { X: (c + .5 * (r & 1) - 3.25) * SQ3, Y: (ROWS - 1 - r) * 1.5 }; }
+function proj(X, Y, Z) { const q = rawProj(X, Y, Z); return { x: L.P.ox + (q.x - L.P.minx) * L.P.M, y: L.P.oy + (q.y - L.P.miny) * L.P.My, k: q.k * L.P.M }; }
+function hexCorners(X, Y, R, Z) { const out = []; for (let i = 0; i < 6; i++) { const a = Math.PI / 180 * (60 * i + 30); out.push(proj(X + R * Math.cos(a), Y + R * Math.sin(a), Z)); } return out; }
 function resize() {
   const st = $('stage'); const W = st.clientWidth, H = st.clientHeight;
   DPR = Math.min(window.devicePixelRatio || 1, 2.5);
   cv.width = W * DPR; cv.height = H * DPR; cv.style.width = W + 'px'; cv.style.height = H + 'px';
-  const s = Math.max(10, Math.min(W / (SQ3 * 7.5 + .2), (H - 8) / 14.9));
-  const boardW = SQ3 * s * 7.5, ox = (W - boardW) / 2, oy = Math.max(4, (H - 14.8 * s) / 2);
-  const slot = Math.min(W / 9, s * 1.85), benchX0 = (W - slot * 9) / 2, benchY = oy + 12.5 * s + .35 * s;
-  const itemSize = Math.min(W / 10, s * 1.2), itemY = benchY + slot + .2 * s;
-  L = { W, H, s, ox, oy, slot, benchX0, benchY, itemSize, itemY, itemCols: Math.floor(W / itemSize) };
+  const slot = Math.min(W / 9, 58, H * .14), benchX0 = (W - slot * 9) / 2, benchY = H - slot - 6;
+  const boardH = benchY - 8;
+  // fit the projected board (plus head-room for far units) into the board area
+  let minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9;
+  const grow = q => { minx = Math.min(minx, q.x); maxx = Math.max(maxx, q.x); miny = Math.min(miny, q.y); maxy = Math.max(maxy, q.y); };
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const { X, Y } = worldOf(r, c);
+    for (let i = 0; i < 6; i++) { const a = Math.PI / 180 * (60 * i + 30); grow(rawProj(X + Math.cos(a), Y + Math.sin(a), -TILE_H)); }
+    if (r === 0) grow(rawProj(X, Y, 2.3));
+  }
+  const bw = maxx - minx, bh = maxy - miny;
+  const M = Math.min((W - 8) / bw, boardH / bh * 1.0);
+  const My = Math.min(M * 1.3, boardH / bh);
+  L = { W, H, slot, benchX0, benchY, itemSize: 0, itemY: H, itemCols: 0, P: { M, My, minx, miny, ox: (W - bw * M) / 2, oy: Math.max(2, (boardH - bh * My) / 2) } };
+  L.cells = []; L.tiles = [];
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const { X, Y } = worldOf(r, c), q = proj(X, Y, 0);
+    L.cells[r * COLS + c] = { x: q.x, y: q.y, k: q.k };
+    L.tiles[r * COLS + c] = { top: hexCorners(X, Y, .95, 0), bot: hexCorners(X, Y, .95, -TILE_H), X, Y };
+  }
+  const mid = L.cells[3 * COLS + 3];
+  L.s = mid.k; L.flat = (proj(0, 5, 0).y - proj(0, 6, 0).y) / proj(0, 5.5, 0).k;
+  L.ox = 0;
+  const pl = (X, Y) => proj(X, Y, -TILE_H);
+  L.platform = [pl(-7.4, -1.3), pl(7.4, -1.3), pl(7.4, 11.8), pl(-7.4, 11.8)];
+  L.platTop = [proj(-7.4, -1.3, -TILE_H + .02), proj(7.4, -1.3, -TILE_H + .02)];
+  L.platBot = [proj(-7.4, -1.3, -TILE_H - .9), proj(7.4, -1.3, -TILE_H - .9)];
+  L.divider = [proj(-6.7, 5.25, .01), proj(6.7, 5.25, .01)];
 }
-function cell(r, c) { return { x: L.ox + L.s * SQ3 * (c + .5 * (r & 1)) + L.s * SQ3 / 2, y: L.oy + L.s + r * 1.5 * L.s }; }
+function cell(r, c) { return L.cells[r * COLS + c]; }
 function benchPos(i) { return { x: L.benchX0 + L.slot * (i + .5), y: L.benchY + L.slot / 2 }; }
-function itemPos(i) { return { x: L.itemSize * (i + .5) + (L.W - L.itemSize * Math.min(L.itemCols, 10)) / 2, y: L.itemY + L.itemSize / 2 }; }
-function hexPath(x, y, s) { ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = Math.PI / 180 * (60 * i - 30); const px = x + s * Math.cos(a), py = y + s * Math.sin(a); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); } ctx.closePath(); }
+function itemPos(i) { return { x: -999, y: -999 }; }
+function polyPath(pts) { ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); ctx.closePath(); }
+function hexPath(x, y, s) { ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = Math.PI / 180 * (60 * i - 30); const px = x + s * Math.cos(a), py = y + s * Math.sin(a) * (L.flat || 1); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); } ctx.closePath(); }
 function fighterPos(f) {
   const a = cell(f.r, f.c);
-  let x = a.x, y = a.y;
-  if (f.moveT > 0 && (f.fromR !== f.r || f.fromC !== f.c)) { const b = cell(f.fromR, f.fromC), k = 1 - f.moveT / f.moveDur; x = b.x + (a.x - b.x) * k; y = b.y + (a.y - b.y) * k; }
-  if (f.lunge > 0 && f.target) { const t = cell(f.target.r, f.target.c), k = Math.sin(f.lunge / .18 * Math.PI) * .25 * L.s; const dx = t.x - x, dy = t.y - y, m = Math.hypot(dx, dy) || 1; x += dx / m * k; y += dy / m * k; }
-  return { x, y };
+  let x = a.x, y = a.y, k = a.k;
+  if (f.moveT > 0 && (f.fromR !== f.r || f.fromC !== f.c)) { const b = cell(f.fromR, f.fromC), t = 1 - f.moveT / f.moveDur; x = b.x + (a.x - b.x) * t; y = b.y + (a.y - b.y) * t; k = b.k + (a.k - b.k) * t; }
+  if (f.lunge > 0 && f.target) { const t = cell(f.target.r, f.target.c), m0 = Math.sin(f.lunge / .18 * Math.PI) * .25 * k; const dx = t.x - x, dy = t.y - y, m = Math.hypot(dx, dy) || 1; x += dx / m * m0; y += dy / m * m0; }
+  return { x, y, k };
 }
+function drawTile(r, c, top, mine, hot) {
+  const T = L.tiles[r * COLS + c], th = SET.theme;
+  const base = hot ? '#4a4580' : top;
+  // sides (painter: drawn before the top face, which hides the back ones)
+  for (let i = 0; i < 6; i++) {
+    const j = (i + 1) % 6, a = T.top[i], b = T.top[j], c2 = T.bot[j], d = T.bot[i];
+    const ang = (60 * i + 60) * Math.PI / 180, ny = Math.sin(ang), nx = Math.cos(ang);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c2.x, c2.y); ctx.lineTo(d.x, d.y); ctx.closePath();
+    ctx.fillStyle = shade3(base, -.38 + ny * .12 + nx * .08); ctx.fill();
+  }
+  polyPath(T.top);
+  const fog = (ROWS - 1 - r) / (ROWS - 1);
+  const g = ctx.createLinearGradient(T.top[4].x, T.top[4].y, T.top[1].x, T.top[1].y);
+  g.addColorStop(0, shade3(base, .12 - fog * .12)); g.addColorStop(1, shade3(base, -.05 - fog * .12));
+  ctx.fillStyle = g; ctx.fill();
+  ctx.strokeStyle = hot ? '#fff' : mine ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.07)'; ctx.lineWidth = hot ? 2 : 1; ctx.stroke();
+}
+const shadeCache = {};
+function shade3(col, k) { const key = col + '|' + k.toFixed(2); if (shadeCache[key]) return shadeCache[key]; let r, g, b; if (col[0] === '#') { const n = parseInt(col.slice(1), 16); r = n >> 16; g = n >> 8 & 255; b = n & 255; } else { [r, g, b] = col.match(/\d+/g).map(Number); } if (k > 0) { r += (255 - r) * k; g += (255 - g) * k; b += (255 - b) * k; } else { r *= 1 + k; g *= 1 + k; b *= 1 + k; } return shadeCache[key] = `rgb(${r | 0},${g | 0},${b | 0})`; }
+function drawArena() {
+  const th = SET.theme, W = L.W, H = L.H;
+  // backdrop glow + horizon
+  const sky = ctx.createLinearGradient(0, 0, 0, L.benchY);
+  sky.addColorStop(0, shade3(th.bg, .08)); sky.addColorStop(.5, shade3(th.panel2, -.1)); sky.addColorStop(1, shade3(th.bg, -.3));
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+  const far = L.platform[2], glow = ctx.createRadialGradient(W / 2, far.y, 10, W / 2, far.y, W * .7);
+  glow.addColorStop(0, hexA(th.accent, .22)); glow.addColorStop(1, hexA(th.accent, 0));
+  ctx.fillStyle = glow; ctx.fillRect(0, 0, W, L.benchY);
+  // platform slab
+  const [a, b, c, d] = L.platform, [ta, tb] = L.platTop, [ba, bb] = L.platBot;
+  ctx.beginPath(); ctx.moveTo(ta.x, ta.y); ctx.lineTo(tb.x, tb.y); ctx.lineTo(bb.x, bb.y); ctx.lineTo(ba.x, ba.y); ctx.closePath();
+  const fr = ctx.createLinearGradient(0, ta.y, 0, ba.y); fr.addColorStop(0, shade3(th.line, -.1)); fr.addColorStop(1, shade3(th.bg, -.5));
+  ctx.fillStyle = fr; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c.x, c.y); ctx.lineTo(d.x, d.y); ctx.closePath();
+  const pf = ctx.createLinearGradient(0, d.y, 0, a.y); pf.addColorStop(0, shade3(th.bg, -.25)); pf.addColorStop(1, shade3(th.panel, -.15));
+  ctx.fillStyle = pf; ctx.fill(); ctx.strokeStyle = hexA(th.accent, .35); ctx.lineWidth = 1.5; ctx.stroke();
+}
+function hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${n >> 8 & 255},${n & 255},${a})`; }
 function drawUnitBody(x, y, rad, o) {
   const T = performance.now() / 1000, seed = o.seed || 0, A = o.alpha ?? 1, face = o.face || 1, TAU = Math.PI * 2, big = o.big || 1;
   ctx.save(); ctx.globalAlpha = A;
@@ -2107,43 +2180,40 @@ function draw() {
   ctx.clearRect(0, 0, L.W, L.H);
   const s = L.s, p = state.player, plan = state.phase === 'plan';
   const hover = drag && drag.moved ? dropTarget(drag.x, drag.y, drag.hit, drag.cx, drag.cy) : null;
-  // board
-  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-    const { x, y } = cell(r, c);
-    hexPath(x, y, s * .96);
-    const mine = r >= 4;
-    const th = SET.theme; ctx.fillStyle = mine ? th.mine[r % 2] : th.foe[r % 2];
-    if (hover && hover.t === 'board' && hover.k === key(r, c)) ctx.fillStyle = '#4a4580';
-    ctx.fill(); ctx.strokeStyle = th.line; ctx.lineWidth = 1; ctx.stroke();
-  }
-  // divider
-  const dy = cell(4, 0).y - s * .75; ctx.strokeStyle = '#ffffff18'; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.moveTo(L.ox, dy); ctx.lineTo(L.ox + SQ3 * s * 7.5, dy); ctx.stroke(); ctx.setLineDash([]);
+  // 3D arena + board
+  drawArena();
+  const th = SET.theme;
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) drawTile(r, c, r >= 4 ? th.mine[r % 2] : th.foe[r % 2], r >= 4, hover && hover.t === 'board' && hover.k === key(r, c));
+  ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.setLineDash([6, 6]); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(L.divider[0].x, L.divider[0].y); ctx.lineTo(L.divider[1].x, L.divider[1].y); ctx.stroke(); ctx.setLineDash([]);
   const rad = s * .66;
   const dragging = drag && drag.moved ? drag.hit : null;
   if ((state.phase === 'combat' || state.phase === 'resolve') && sim) {
     const fs = sim.fighters.slice().sort((a, b) => a.r - b.r);
     for (const f of fs) {
       if (!f.alive && f.deathT > .5) continue;
-      const { x, y } = fighterPos(f);
+      const { x, y, k: fk } = fighterPos(f);
+      const frad = fk * .66;
       const look = f.creep ? { ring: '#5b5068', star: 1, sprite: fr => creepSprite(f.creep, fr === 'b' || fr === 'c' ? fr : 'a'), sil: creepSil(f.creep), big: f.creep === 'golem' ? 1.3 : 1, fly: f.creep === 'spitter' } : unitLook(f.u, {});
       Object.assign(look, { side: f.side, hpFrac: f.hp / f.maxHp, manaFrac: f.maxMana ? f.mana / f.maxMana : undefined, flash: f.flash, shieldFrac: f.shield / f.maxHp, alpha: f.alive ? (f.stealthT > 0 ? .4 : 1) : Math.max(0, 1 - f.deathT * 2), items: f.items, seed: f.fid, hop: f.moveT > 0 && (f.fromR !== f.r || f.fromC !== f.c) ? 1 - f.moveT / f.moveDur : 0, lunge: f.lunge, atk: f.atkAnim || 0, cast: f.castLock > 0 ? f.castLock / .45 : 0, deathT: f.alive ? 0 : f.deathT, face: live(f.target) && cell(f.target.r, f.target.c).x < x - 2 ? -1 : 1 });
       if (f.isMini) look.big = .7;
-      drawUnitBody(x, y, rad, look);
-      if (f.alive && f.stunT > 0) { ctx.font = `${rad * .7}px system-ui`; ctx.textAlign = 'center'; ctx.fillText('💫', x, y - rad * 2.1); }
-      if (f.alive && f.immuneT > 0) { ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y - rad * .5, rad * 1.3, 0, Math.PI * 2); ctx.stroke(); }
-      if (f.alive && f.blocks > 0) { ctx.font = `700 ${rad * .45}px system-ui`; ctx.fillStyle = '#d6dce8'; ctx.textAlign = 'center'; ctx.fillText('🛡' + f.blocks, x - rad * .9, y + rad * .3); }
+      drawUnitBody(x, y, frad, look);
+      if (f.alive && f.stunT > 0) { ctx.font = `${frad * .7}px system-ui`; ctx.textAlign = 'center'; ctx.fillText('💫', x, y - frad * 2.1); }
+      if (f.alive && f.immuneT > 0) { ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(x, y - frad * .6, frad * 1.2, frad * 1.5, 0, 0, Math.PI * 2); ctx.stroke(); }
+      if (f.alive && f.blocks > 0) { ctx.font = `700 ${frad * .45}px system-ui`; ctx.fillStyle = '#d6dce8'; ctx.textAlign = 'center'; ctx.fillText('🛡' + f.blocks, x - frad * .9, y + frad * .3); }
     }
     for (const pr of sim.proj) {
       if (pr.t < 0 || pr.melee) continue;
       const a = cell(pr.fr, pr.fc), b = live(pr.tgt) ? fighterPos(pr.tgt) : cell(pr.tgt.r, pr.tgt.c), k = Math.min(1, pr.t / pr.dur);
-      const x = a.x + (b.x - a.x) * k, y = a.y + (b.y - a.y) * k;
-      ctx.beginPath(); ctx.arc(x, y, pr.big ? s * .2 : s * .11, 0, Math.PI * 2); ctx.fillStyle = pr.big ? pr.color : '#fff3c4'; ctx.shadowColor = pr.color; ctx.shadowBlur = 8; ctx.fill(); ctx.shadowBlur = 0;
+      const x = a.x + (b.x - a.x) * k, gy = a.y + (b.y - a.y) * k, kk = a.k + ((b.k || a.k) - a.k) * k;
+      const y = gy - kk * (pr.melee ? 0 : .9 + Math.sin(Math.PI * k) * Math.min(2.2, .35 * Math.hypot(b.x - a.x, b.y - a.y) / kk));
+      ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(x, gy, kk * .14, kk * .14 * L.flat, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x, y, pr.big ? kk * .2 : kk * .11, 0, Math.PI * 2); ctx.fillStyle = pr.big ? pr.color : '#fff3c4'; ctx.shadowColor = pr.color; ctx.shadowBlur = 8; ctx.fill(); ctx.shadowBlur = 0;
     }
     for (const fx of sim.fx) {
       const k = fx.t / fx.dur;
-      if (fx.type === 'ring') { const c = cell(fx.r, fx.c); ctx.beginPath(); ctx.arc(c.x, c.y, s * fx.rad * (.3 + k * .9), 0, Math.PI * 2); ctx.strokeStyle = fx.color; ctx.globalAlpha = 1 - k; ctx.lineWidth = 4; ctx.stroke(); ctx.globalAlpha = 1; }
-      else if (fx.type === 'cast') { if (!fx.f.alive) continue; const c = fighterPos(fx.f); ctx.beginPath(); ctx.arc(c.x, c.y, rad * (1 + k * .8), 0, Math.PI * 2); ctx.strokeStyle = fx.color; ctx.globalAlpha = 1 - k; ctx.lineWidth = 3; ctx.stroke(); ctx.globalAlpha = 1; }
-      else if (fx.type === 'bolt') { const c = cell(fx.r, fx.c); ctx.save(); ctx.globalAlpha = 1 - k; ctx.strokeStyle = fx.color; ctx.lineWidth = 3; ctx.shadowColor = fx.color; ctx.shadowBlur = 10; ctx.beginPath(); ctx.moveTo(c.x - s * .2, c.y - s * 2); ctx.lineTo(c.x + s * .25, c.y - s * 1.1); ctx.lineTo(c.x - s * .15, c.y - s * .9); ctx.lineTo(c.x + s * .1, c.y); ctx.stroke(); ctx.restore(); }
+      if (fx.type === 'ring') { const c = cell(fx.r, fx.c), rr = c.k * fx.rad * (.3 + k * .9); ctx.beginPath(); ctx.ellipse(c.x, c.y, rr, rr * L.flat, 0, 0, Math.PI * 2); ctx.strokeStyle = fx.color; ctx.globalAlpha = 1 - k; ctx.lineWidth = 4; ctx.stroke(); ctx.globalAlpha = 1; }
+      else if (fx.type === 'cast') { if (!fx.f.alive) continue; const c = fighterPos(fx.f), rr = c.k * .66 * (1 + k * .8); ctx.beginPath(); ctx.ellipse(c.x, c.y, rr, rr * L.flat, 0, 0, Math.PI * 2); ctx.strokeStyle = fx.color; ctx.globalAlpha = 1 - k; ctx.lineWidth = 3; ctx.stroke(); ctx.globalAlpha = 1; }
+      else if (fx.type === 'bolt') { const c = cell(fx.r, fx.c), q = c.k; ctx.save(); ctx.globalAlpha = 1 - k; ctx.strokeStyle = fx.color; ctx.lineWidth = 3; ctx.shadowColor = fx.color; ctx.shadowBlur = 10; ctx.beginPath(); ctx.moveTo(c.x - q * .2, c.y - q * 3); ctx.lineTo(c.x + q * .25, c.y - q * 1.7); ctx.lineTo(c.x - q * .15, c.y - q * 1.4); ctx.lineTo(c.x + q * .1, c.y); ctx.stroke(); ctx.restore(); }
       else if (fx.type === 'slash') { const c = cell(fx.r, fx.c); ctx.save(); ctx.globalAlpha = 1 - k; ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(c.x - s * .7, c.y - s * .7 + k * 6); ctx.lineTo(c.x + s * .7, c.y + s * .7 + k * 6); ctx.stroke(); ctx.strokeStyle = fx.color; ctx.lineWidth = 2; ctx.stroke(); ctx.restore(); }
     }
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -2151,46 +2221,55 @@ function draw() {
     for (const t of sim.texts) {
       const c = cell(t.r, t.c); const k = t.t / .9;
       ctx.globalAlpha = 1 - k * k; ctx.font = `800 ${s * .5 * t.size}px system-ui`; ctx.fillStyle = t.color; ctx.strokeStyle = '#000'; ctx.lineWidth = 3;
-      const x = c.x + t.dx * s, y = c.y - s * .4 - k * s * .9; ctx.strokeText(t.txt, x, y); ctx.fillText(t.txt, x, y); ctx.globalAlpha = 1;
+      const x = c.x + t.dx * c.k, y = c.y - c.k * 1.5 - k * c.k * .9; ctx.strokeText(t.txt, x, y); ctx.fillText(t.txt, x, y); ctx.globalAlpha = 1;
     }
   } else {
-    for (const k in p.board) {
+    for (const k of Object.keys(p.board).sort((a, b) => unkey(a)[0] - unkey(b)[0])) {
       if (dragging && dragging.t === 'board' && dragging.k === k) continue;
-      const [r, c] = unkey(k); const { x, y } = cell(r, c);
-      drawUnitBody(x, y, rad, unitLook(p.board[k], { highlight: hover && hover.t === 'unit' && hover.u === p.board[k] }));
+      const [r, c] = unkey(k); const { x, y, k: ck } = cell(r, c);
+      drawUnitBody(x, y, ck * .66, unitLook(p.board[k], { highlight: hover && hover.t === 'unit' && hover.u === p.board[k] }));
     }
     if (plan && roundType() === 'pvp' && state.opp >= 0) {
       ctx.fillStyle = '#ffffff40'; ctx.font = `600 ${s * .45}px system-ui`; ctx.textAlign = 'center'; ctx.fillText(`Next: ${state.bots[state.opp].name} (tap their name above to scout)`, L.W / 2, cell(1, 3).y + s * .7);
     } else if (plan) { ctx.fillStyle = '#ffffff40'; ctx.font = `600 ${s * .45}px system-ui`; ctx.textAlign = 'center'; ctx.fillText('Monster round — win for units, gold & items', L.W / 2, cell(1, 3).y + s * .7); }
   }
-  // bench
+  // bench shelf
+  const shelf = ctx.createLinearGradient(0, L.benchY - 4, 0, L.H);
+  shelf.addColorStop(0, shade3(SET.theme.panel2, .05)); shelf.addColorStop(1, shade3(SET.theme.bg, -.3));
+  ctx.fillStyle = shelf; roundRect(L.benchX0 - 4, L.benchY - 4, L.slot * 9 + 8, L.slot + 8, 10); ctx.fill();
   for (let i = 0; i < 9; i++) {
-    const { x, y } = benchPos(i), sz = L.slot * .9;
-    ctx.fillStyle = hover && hover.t === 'bench' && hover.i === i ? '#4a4580' : '#221f33'; ctx.strokeStyle = '#3a3558';
-    roundRect(x - sz / 2, y - sz / 2, sz, sz, 7); ctx.fill(); ctx.stroke();
+    const { x, y } = benchPos(i), sz = L.slot * .88;
+    const hot = hover && hover.t === 'bench' && hover.i === i;
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; roundRect(x - sz / 2, y - sz / 2 + 3, sz, sz, 8); ctx.fill();
+    ctx.fillStyle = hot ? '#4a4580' : shade3(SET.theme.panel, -.1); ctx.strokeStyle = hot ? '#fff' : SET.theme.line;
+    roundRect(x - sz / 2, y - sz / 2, sz, sz, 8); ctx.fill(); ctx.stroke();
     const u = p.bench[i];
-    if (u && !(dragging && dragging.t === 'bench' && dragging.i === i)) drawUnitBody(x, y + L.slot * .06, Math.min(rad, L.slot * .33), unitLook(u, { highlight: hover && hover.t === 'unit' && hover.u === u }));
+    if (u && !(dragging && dragging.t === 'bench' && dragging.i === i)) drawUnitBody(x, y + L.slot * .06, L.slot * .3, unitLook(u, { highlight: hover && hover.t === 'unit' && hover.u === u }));
   }
   // dragged thing
   if (dragging) {
-    if (dragging.t !== 'item') { const u = getAt(p, dragging.t === 'board' ? { t: 'board', k: dragging.k } : { t: 'bench', i: dragging.i }); if (u) drawUnitBody(drag.x, drag.y - s * .4, rad * 1.1, unitLook(u, { alpha: .9 })); }
+    if (dragging.t !== 'item') { const u = getAt(p, dragging.t === 'board' ? { t: 'board', k: dragging.k } : { t: 'bench', i: dragging.i }); if (u) { const hk = hover && hover.t === 'board' ? cell(...unkey(hover.k)).k : s; drawUnitBody(drag.x, drag.y - s * .4, hk * .72, unitLook(u, { alpha: .9 })); } }
   }
 }
 function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 
 /* ================= INPUT ================= */
-function hexAt(x, y) { let best = null, bd = L.s * .95; for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { const p = cell(r, c), d = Math.hypot(p.x - x, p.y - y); if (d < bd) { bd = d; best = { r, c }; } } return best; }
+function hexAt(x, y) { let best = null, bd = 1e9; for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { const p = cell(r, c), d = Math.hypot(p.x - x, (p.y - y) / (L.flat || 1)) / p.k; if (d < bd) { bd = d; best = { r, c }; } } return bd < 1.05 ? best : null; }
 function benchAt(x, y) { if (y < L.benchY || y > L.benchY + L.slot) return -1; const i = Math.floor((x - L.benchX0) / L.slot); return i >= 0 && i < 9 ? i : -1; }
 function bagIndexAt(cx, cy) { if (cx == null) return -1; const el = document.elementFromPoint(cx, cy); const b = el && el.closest && el.closest('.bagitem'); return b ? +b.dataset.i : -1; }
 function itemAt(x, y) { if (y < L.itemY || y > L.itemY + L.itemSize) return -1; for (let i = 0; i < Math.min(state.player.items.length, L.itemCols, 10); i++) { const p = itemPos(i); if (Math.abs(p.x - x) < L.itemSize / 2) return i; } return -1; }
 function hitTest(x, y) {
   const p = state.player;
   const bi = benchAt(x, y); if (bi >= 0 && p.bench[bi]) return { t: 'bench', i: bi };
-  const h = hexAt(x, y); if (!h) return null;
   if ((state.phase === 'combat' || state.phase === 'resolve') && sim) {
-    let best = null, bd = L.s; for (const f of sim.fighters) { if (!f.alive) continue; const q = fighterPos(f), d = Math.hypot(q.x - x, q.y - y); if (d < bd) { bd = d; best = f; } }
-    return best ? { t: 'fighter', f: best } : null;
+    let best = null, bd = 1e9; for (const f of sim.fighters) { if (!f.alive) continue; const q = fighterPos(f), d = Math.hypot(q.x - x, q.y - q.k * .7 - y) / q.k; if (d < bd) { bd = d; best = f; } }
+    return best && bd < 1.1 ? { t: 'fighter', f: best } : null;
   }
+  // tap the unit's body (sprites stand above their tile), nearest wins
+  let bestK = null, bd = 1e9;
+  for (const k in p.board) { const [r, c] = unkey(k), q = cell(r, c), d = Math.hypot(q.x - x, q.y - q.k * .7 - y) / q.k; if (d < bd) { bd = d; bestK = k; } }
+  if (bestK && bd < 1.05) return { t: 'board', k: bestK };
+  const h = hexAt(x, y); if (!h) return null;
   const k = key(h.r, h.c); if (p.board[k]) return { t: 'board', k };
   return null;
 }
