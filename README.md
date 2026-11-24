@@ -13,3 +13,6 @@ Also: craft items right in your bag, and pick Silver / Gold / Prismatic **augmen
 
 ## Items
 Every completed item has a special effect (attack speed per hit or per second, splash, chain lightning, burn, thorns, shields, lifesteal and more). From stage 3, monster rounds drop an **Artifact Anvil** to forge one of 10 one-of-a-kind artifacts (Phoenix Feather, Echo Crystal, Stormcaller Horn…). Fights that drag past 25s go into **overtime**: damage ramps up and healing is halved.
+
+## Traits
+Every trait has a unique special power at 2 / 4 / 6 units — e.g. Ember burns, Storm chain lightning, Shade stealth, Chrome reboots, Glitch teleports, Bulwark taunts, Fae crits stun, Knights block attacks, Jelly splits into mini copies, Bakers hand out healing treats. Tap a trait chip to read every level and see which units have it.

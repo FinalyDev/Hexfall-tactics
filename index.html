@@ -77,6 +77,10 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
 #sellZone.show{display:flex}
 #sellZone.hot{background:rgba(240,60,80,.97)}
 .hidden{display:none!important}
+.tunits{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.tu{display:flex;flex-direction:column;align-items:center;width:58px;padding:3px;border-radius:9px;border:2px solid;background:var(--panel2);text-align:center;opacity:.75}
+.tu img{width:40px;height:40px;border-radius:50%}.tu small{font-size:10px;line-height:1.2;color:#ddd}
+.tu.own{opacity:1}.tu.on{opacity:1;box-shadow:0 0 0 2px #4fd58a}
 #bag{display:flex;align-items:center;gap:6px;padding:5px 6px;background:#1a1826;border-top:1px solid var(--line)}
 .bagl{font-size:20px;flex:0 0 auto;display:flex;flex-direction:column;align-items:center;line-height:1;width:28px}.bagl b{font-size:11px;color:var(--muted);margin-top:2px}
 #bagItems{display:flex;gap:6px;overflow-x:auto;flex:1;min-height:46px;align-items:center;scrollbar-width:none}
@@ -170,7 +174,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
     <b>How to play</b><br>
     • Tap shop cards to <b>buy</b> units. Drag them from the bench onto the bottom half of the board.<br>
     • <b>3 copies</b> of a unit combine into a ★★ unit; 3 ★★ make a ★★★. Shop cards show <b>⚔</b> how many you have in play, <b>🪑</b> on your bench, dots for copies, and glow gold with <b>⬆★★</b> when buying ranks it up.<br>
-    • Every unit has an <b>origin</b> and a <b>class</b>. Field 2, 4 or 6 different units of a trait to unlock bigger bonuses. Each set has its own traits.<br>
+    • Every unit has an <b>origin</b> and a <b>class</b>. Field 2, 4 or 6 different units of a trait to unlock its <b>special power</b> — burns, chain lightning, revives, stuns, taunts and more. Tap a trait to read it. Each set has its own traits.<br>
     • <b>Assassins</b> (sets 2–4) leap onto the enemy back line when the fight starts.<br>
     • Your <b>level</b> = how many units can fight. Every 10 gold you hold earns +1 interest (max 5).<br>
     • Monster rounds drop <b>units, gold and item parts</b> (shown in your 🎒 bag above the shop). Drag one part onto another in your bag (or tap it) to craft a full item, then drag it onto a unit.<br>
@@ -219,7 +223,49 @@ const EFFECTS = {
   teamAp:      { team: true, text: v => `abilities deal +${v}% damage`, apply: (s, v) => { s.ap += v; } },
   teamHp:      { team: true, text: v => `+${v} max health`, apply: (s, v) => { s.hp += v; } },
 };
-function traitText(t, v) { return (EFFECTS[t.effect].team ? 'All allies: ' : `${t.name} units: `) + EFFECTS[t.effect].text(v); }
+const TRAIT_SP = {
+  ignite:      { text: v => `attacks and abilities set the target on fire, burning ${v}% of its max health per second for 3s.` },
+  tideWave:    { text: v => `every 4 seconds a tide washes over your team, giving every ally ${v} mana.` },
+  lifebloom:   { team: true, text: v => `the first time each ally drops below 50% health, it blooms and heals ${v}% of its max health.` },
+  staticCharge:{ text: v => `every 3rd attack chains lightning through 3 enemies for ${v} magic damage.` },
+  shadowstep:  { text: v => `vanish at the start of combat and again at 50% health for ${v}s — attacks miss them — and their next attack always crits.` },
+  pact:        { text: v => `at the start of combat, shield themselves and every adjacent ally for ${v}.` },
+  bloodlust:   { text: v => `gain +${v}% attack damage every time an enemy dies (stacks all fight).` },
+  longshot:    { text: v => `deal +${v}% damage for every hex between them and their target.` },
+  sanctuary:   { team: true, text: v => `the first time each ally drops below 25% health, it becomes immune to damage for ${v}s.` },
+  spellEcho:   { team: true, text: v => `abilities have a ${v}% chance to cast a second time at half power.` },
+  reboot:      { text: v => `the first time one is destroyed, it reboots with ${v}% health.` },
+  bounce:      { text: v => `attacks bounce to a second enemy for ${v}% damage.` },
+  blink:       { text: v => `every ${v}s, teleport next to the weakest enemy; the next attack deals double damage.` },
+  overload:    { text: v => `abilities overload, dealing ${v}% of their damage again to enemies next to the target.` },
+  nanobots:    { text: v => `when one is destroyed, its nanobots heal every ally for ${v}% of their max health.` },
+  taunt:       { text: v => `for the first ${v}s of combat, enemies within 2 hexes are forced to attack them.` },
+  execute:     { text: v => `attacks instantly finish off enemies below ${v}% health.` },
+  rocket:      { text: v => `every 5th attack fires a rocket dealing ${v}% attack damage to the target and enemies next to it.` },
+  triage:      { text: v => `every 3 seconds, heal the lowest-health ally for ${v}.` },
+  drain:       { text: v => `attacks steal ${v} mana from the target.` },
+  moonrise:    { text: v => `after 8 seconds the moon rises: gain +${v}% ability damage and heal 20% health.` },
+  sunburst:    { text: v => `casting an ability also blasts every enemy within 2 hexes for ${v} magic damage.` },
+  pack:        { text: (v, n) => `deal +${v}% damage for each other ${n} attacking the same target.` },
+  chill:       { text: v => `attacks chill the target, cutting its attack speed by ${v}% for 2s.` },
+  glamour:     { text: v => `gain 20% crit chance, and critical strikes stun the target for ${v}s.` },
+  blockWall:   { text: v => `completely block the first ${v} attacks they take each combat.` },
+  bleed:       { text: v => `attacks cause bleeding for ${v}% of attack damage per second for 3s (stacks).` },
+  hail:        { text: v => `every 4 seconds, loose arrows at ${v} extra random ${v === 1 ? 'enemy' : 'enemies'}.` },
+  regrowth:    { text: v => `every 4 seconds, heal the lowest-health ally and its neighbours for ${v}.` },
+  manaFlow:    { text: v => `abilities cost ${v}% less mana.` },
+  sugarRush:   { text: v => `gain +${v}% attack speed for 3s after casting or getting a takedown.` },
+  gooey:       { text: v => `enemies that attack them get stuck, losing ${v}% attack speed for 2s.` },
+  refresh:     { text: v => `every 5 seconds, shake off burns, bleeds, chills and stuns, and heal ${v}% health.` },
+  shred:       { text: v => `each attack shreds ${v} armor from the target (stacks).` },
+  fizzCast:    { text: v => `when one casts an ability, every other ally gains ${v} mana.` },
+  split:       { text: v => `when one dies, it splits into a mini copy with ${v}% of its max health.` },
+  popRocks:    { text: v => `enemies they finish off explode, dealing ${v} magic damage to enemies next to them.` },
+  candyStun:   { text: v => `every 3rd attack throws a hard candy that stuns the target for ${v}s.` },
+  freshBatch:  { text: v => `at the start of combat and every 6 seconds, give the lowest-health ally a treat that heals ${v} and grants 10 mana.` },
+  whipped:     { text: v => `casting an ability gives every ally a ${v} whipped-cream shield for 4s.` },
+};
+function traitText(t, v) { const d = TRAIT_SP[t.sp]; return (d.team ? 'All allies: ' : `${t.name} units: `) + d.text(v, t.name); }
 
 /* ---------- roles (how a unit fights) ---------- */
 const ROLE_BASE = {
@@ -247,18 +293,18 @@ const SETS = [
     id: 'elements', name: 'Elements', num: 1, tagline: 'Fire, water, nature, storm and shadow clash.', deco: 'aura',
     theme: { bg: '#15131f', panel: '#201d2e', panel2: '#2a2640', line: '#3a3558', mine: ['#2f2c4a', '#2b2944'], foe: ['#26223a', '#231f33'], accent: '#ff7a45' },
     origins: [
-      { name: 'Ember', icon: '🔥', color: '#ff6b3d', effect: 'abilityDmg', vals: [25, 60] },
-      { name: 'Tide',  icon: '🌊', color: '#3da5ff', effect: 'manaRegen', vals: [4, 9] },
-      { name: 'Grove', icon: '🌿', color: '#4fcf5a', effect: 'regen', vals: [2, 4] },
-      { name: 'Storm', icon: '⚡', color: '#e8c22e', effect: 'attackSpeed', vals: [25, 60] },
-      { name: 'Shade', icon: '🌑', color: '#a77bff', effect: 'crit', vals: [25, 50] },
+      { name: 'Ember', icon: '🔥', color: '#ff6b3d', sp: 'ignite', vals: [1.5, 3, 5] },
+      { name: 'Tide',  icon: '🌊', color: '#3da5ff', sp: 'tideWave', vals: [10, 20, 35] },
+      { name: 'Grove', icon: '🌿', color: '#4fcf5a', sp: 'lifebloom', vals: [15, 30, 50] },
+      { name: 'Storm', icon: '⚡', color: '#e8c22e', sp: 'staticCharge', vals: [60, 120, 200] },
+      { name: 'Shade', icon: '🌑', color: '#a77bff', sp: 'shadowstep', vals: [1.5, 2.5, 4] },
     ],
     classes: [
-      { name: 'Guardian', icon: '🛡️', role: 'tank', effect: 'teamArmor', vals: [20, 50] },
-      { name: 'Striker',  icon: '⚔️', role: 'bruiser', effect: 'adPct', vals: [20, 50] },
-      { name: 'Ranger',   icon: '🏹', role: 'marksman', effect: 'doubleAttack', vals: [25, 50] },
-      { name: 'Mystic',   icon: '🔮', role: 'healer', effect: 'teamMr', vals: [20, 50] },
-      { name: 'Arcanist', icon: '✨', role: 'mage', effect: 'teamAp', vals: [15, 35] },
+      { name: 'Guardian', icon: '🛡️', role: 'tank', sp: 'pact', vals: [150, 300, 500] },
+      { name: 'Striker',  icon: '⚔️', role: 'bruiser', sp: 'bloodlust', vals: [10, 20, 35] },
+      { name: 'Ranger',   icon: '🏹', role: 'marksman', sp: 'longshot', vals: [5, 9, 14] },
+      { name: 'Mystic',   icon: '🔮', role: 'healer', sp: 'sanctuary', vals: [1, 2, 3.5] },
+      { name: 'Arcanist', icon: '✨', role: 'mage', sp: 'spellEcho', vals: [15, 30, 50] },
     ],
     names: [
       ['Kindle', 'Ripple', 'Sprout', 'Static', 'Murk'],
@@ -279,18 +325,18 @@ const SETS = [
     id: 'neon', name: 'Neon Circuit', num: 2, tagline: 'Robots, hackers and glitches in a cyber city.', deco: 'grid',
     theme: { bg: '#0b0e1c', panel: '#121830', panel2: '#1a2342', line: '#2c4573', mine: ['#18264a', '#152142'], foe: ['#221640', '#1d1338'], accent: '#22e6ff' },
     origins: [
-      { name: 'Chrome', icon: '🔩', color: '#aab8cc', effect: 'bonusHp', vals: [20, 45] },
-      { name: 'Neon',   icon: '💡', color: '#ff3fb4', effect: 'attackSpeed', vals: [25, 60] },
-      { name: 'Glitch', icon: '👾', color: '#6bef5c', effect: 'dodge', vals: [20, 40] },
-      { name: 'Plasma', icon: '☄️', color: '#ff8a2a', effect: 'abilityDmg', vals: [25, 60] },
-      { name: 'Nano',   icon: '🧬', color: '#36c6ff', effect: 'regen', vals: [2, 4] },
+      { name: 'Chrome', icon: '🔩', color: '#aab8cc', sp: 'reboot', vals: [20, 35, 60] },
+      { name: 'Neon',   icon: '💡', color: '#ff3fb4', sp: 'bounce', vals: [30, 50, 80] },
+      { name: 'Glitch', icon: '👾', color: '#6bef5c', sp: 'blink', vals: [6, 4, 2.5] },
+      { name: 'Plasma', icon: '☄️', color: '#ff8a2a', sp: 'overload', vals: [30, 50, 80] },
+      { name: 'Nano',   icon: '🧬', color: '#36c6ff', sp: 'nanobots', vals: [10, 20, 35] },
     ],
     classes: [
-      { name: 'Bulwark',     icon: '🧱', role: 'tank', effect: 'teamArmor', vals: [20, 50] },
-      { name: 'Infiltrator', icon: '🥷', role: 'assassin', effect: 'crit', vals: [30, 60] },
-      { name: 'Gunner',      icon: '🎯', role: 'marksman', effect: 'doubleAttack', vals: [25, 50] },
-      { name: 'Medic',       icon: '⛑️', role: 'healer', effect: 'teamHp', vals: [150, 350] },
-      { name: 'Hacker',      icon: '💻', role: 'mage', effect: 'teamAp', vals: [15, 35] },
+      { name: 'Bulwark',     icon: '🧱', role: 'tank', sp: 'taunt', vals: [3, 5, 8] },
+      { name: 'Infiltrator', icon: '🥷', role: 'assassin', sp: 'execute', vals: [10, 15, 22] },
+      { name: 'Gunner',      icon: '🎯', role: 'marksman', sp: 'rocket', vals: [150, 250, 400] },
+      { name: 'Medic',       icon: '⛑️', role: 'healer', sp: 'triage', vals: [80, 160, 280] },
+      { name: 'Hacker',      icon: '💻', role: 'mage', sp: 'drain', vals: [5, 10, 18] },
     ],
     names: [
       ['Rivet', 'Lumen', 'Bitz', 'Fizzle', 'Mite'],
@@ -312,18 +358,18 @@ const SETS = [
     id: 'kingdom', name: 'Moonlit Kingdom', num: 3, tagline: 'Knights, beasts and fae under the moon.', deco: 'stars',
     theme: { bg: '#101814', panel: '#17231c', panel2: '#203128', line: '#365544', mine: ['#24382d', '#203328'], foe: ['#1c2822', '#19241e'], accent: '#e8c36a' },
     origins: [
-      { name: 'Lunar', icon: '🌙', color: '#8fa6ff', effect: 'manaRegen', vals: [4, 9] },
-      { name: 'Solar', icon: '☀️', color: '#ffb83d', effect: 'abilityDmg', vals: [25, 60] },
-      { name: 'Beast', icon: '🐺', color: '#c98a4b', effect: 'lifesteal', vals: [15, 35] },
-      { name: 'Frost', icon: '❄️', color: '#7fe0f5', effect: 'startShield', vals: [20, 45] },
-      { name: 'Fae',   icon: '🧚', color: '#ff8fd8', effect: 'crit', vals: [25, 50] },
+      { name: 'Lunar', icon: '🌙', color: '#8fa6ff', sp: 'moonrise', vals: [30, 60, 100] },
+      { name: 'Solar', icon: '☀️', color: '#ffb83d', sp: 'sunburst', vals: [60, 120, 200] },
+      { name: 'Beast', icon: '🐺', color: '#c98a4b', sp: 'pack', vals: [8, 15, 25] },
+      { name: 'Frost', icon: '❄️', color: '#7fe0f5', sp: 'chill', vals: [20, 30, 45] },
+      { name: 'Fae',   icon: '🧚', color: '#ff8fd8', sp: 'glamour', vals: [0.5, 1, 1.6] },
     ],
     classes: [
-      { name: 'Knight',   icon: '🛡️', role: 'tank', effect: 'teamArmor', vals: [20, 50] },
-      { name: 'Rogue',    icon: '🗡️', role: 'assassin', effect: 'adPct', vals: [25, 55] },
-      { name: 'Archer',   icon: '🏹', role: 'marksman', effect: 'doubleAttack', vals: [25, 50] },
-      { name: 'Druid',    icon: '🌿', role: 'healer', effect: 'teamMr', vals: [20, 50] },
-      { name: 'Sorcerer', icon: '🔮', role: 'mage', effect: 'teamAp', vals: [15, 35] },
+      { name: 'Knight',   icon: '🛡️', role: 'tank', sp: 'blockWall', vals: [2, 4, 7] },
+      { name: 'Rogue',    icon: '🗡️', role: 'assassin', sp: 'bleed', vals: [15, 25, 40] },
+      { name: 'Archer',   icon: '🏹', role: 'marksman', sp: 'hail', vals: [1, 2, 4] },
+      { name: 'Druid',    icon: '🌿', role: 'healer', sp: 'regrowth', vals: [100, 200, 350] },
+      { name: 'Sorcerer', icon: '🔮', role: 'mage', sp: 'manaFlow', vals: [15, 30, 50] },
     ],
     names: [
       ['Mothwing', 'Sunny', 'Pup', 'Flurry', 'Pixie'],
@@ -345,18 +391,18 @@ const SETS = [
     id: 'sweets', name: 'Sweet Treats', num: 4, tagline: 'Candy critters battle in a sugar kingdom.', deco: 'dots',
     theme: { bg: '#22131d', panel: '#2d1a27', panel2: '#3b2434', line: '#5c3953', mine: ['#43293c', '#3d2537'], foe: ['#33202d', '#2e1c29'], accent: '#ff8fc7' },
     origins: [
-      { name: 'Sugar', icon: '🍬', color: '#ff7fbf', effect: 'attackSpeed', vals: [25, 60] },
-      { name: 'Choco', icon: '🍫', color: '#a0623e', effect: 'bonusHp', vals: [20, 45] },
-      { name: 'Mint',  icon: '🍃', color: '#5fdcaa', effect: 'regen', vals: [2, 4] },
-      { name: 'Sour',  icon: '🍋', color: '#d9e43a', effect: 'crit', vals: [25, 50] },
-      { name: 'Fizz',  icon: '🫧', color: '#7fc7ff', effect: 'manaRegen', vals: [4, 9] },
+      { name: 'Sugar', icon: '🍬', color: '#ff7fbf', sp: 'sugarRush', vals: [30, 60, 100] },
+      { name: 'Choco', icon: '🍫', color: '#a0623e', sp: 'gooey', vals: [15, 25, 40] },
+      { name: 'Mint',  icon: '🍃', color: '#5fdcaa', sp: 'refresh', vals: [5, 10, 18] },
+      { name: 'Sour',  icon: '🍋', color: '#d9e43a', sp: 'shred', vals: [3, 6, 10] },
+      { name: 'Fizz',  icon: '🫧', color: '#7fc7ff', sp: 'fizzCast', vals: [5, 10, 18] },
     ],
     classes: [
-      { name: 'Jelly',  icon: '🍮', role: 'tank', effect: 'teamArmor', vals: [20, 50] },
-      { name: 'Popper', icon: '🍭', role: 'assassin', effect: 'adPct', vals: [25, 55] },
-      { name: 'Slinger',icon: '🎯', role: 'marksman', effect: 'doubleAttack', vals: [25, 50] },
-      { name: 'Baker',  icon: '🧁', role: 'healer', effect: 'teamHp', vals: [150, 350] },
-      { name: 'Whisk',  icon: '✨', role: 'mage', effect: 'teamAp', vals: [15, 35] },
+      { name: 'Jelly',  icon: '🍮', role: 'tank', sp: 'split', vals: [30, 50, 80] },
+      { name: 'Popper', icon: '🍭', role: 'assassin', sp: 'popRocks', vals: [100, 200, 350] },
+      { name: 'Slinger',icon: '🎯', role: 'marksman', sp: 'candyStun', vals: [0.4, 0.8, 1.3] },
+      { name: 'Baker',  icon: '🧁', role: 'healer', sp: 'freshBatch', vals: [120, 240, 400] },
+      { name: 'Whisk',  icon: '✨', role: 'mage', sp: 'whipped', vals: [40, 90, 160] },
     ],
     names: [
       ['Gummy', 'Truffle', 'Sprig', 'Zest', 'Bubbles'],
@@ -391,7 +437,7 @@ function applySet(id) {
   SET = SET_BY[id] || SETS[0];
   TRAITS = {};
   [...SET.origins.map(o => ({ ...o, kind: 'origin' })), ...SET.classes.map(c => ({ ...c, kind: 'class' }))]
-    .forEach(t => { const [a, b] = t.vals; TRAITS[t.name] = { ...t, tiers: [2, 4, 6], vals: [a, b, Math.round(b + (b - a) * .6)], text: v => traitText(t, v) }; });
+    .forEach(t => { TRAITS[t.name] = { ...t, tiers: [2, 4, 6], vals: t.vals.slice(), text: v => traitText(t, v) }; });
   UNITS = SET.units; UNIT = {}; UNITS.forEach(u => UNIT[u.id] = u);
   const th = SET.theme, rs = document.documentElement.style;
   rs.setProperty('--bg', th.bg); rs.setProperty('--panel', th.panel); rs.setProperty('--panel2', th.panel2); rs.setProperty('--line', th.line);
@@ -1016,7 +1062,7 @@ function baseStats(u) {
 }
 function fullStats(u, b) {
   const s = baseStats(u), d = UNIT[u.id];
-  if (b) for (const t in b) { const tr = TRAITS[t]; if (!tr) continue; const e = EFFECTS[tr.effect]; if (e.team || d.origin === t || d.cls === t) e.apply(s, b[t]); }
+  if (b) for (const t in b) { const tr = TRAITS[t]; if (!tr || !tr.effect) continue; const e = EFFECTS[tr.effect]; if (e.team || d.origin === t || d.cls === t) e.apply(s, b[t]); }
   return s;
 }
 function abilityPower(u, ap) { return COST_ABILITY[UNIT[u.id].cost] * STAR_AB[u.star] * (1 + (ap || 0) / 100); }
@@ -1044,6 +1090,23 @@ function buildSim(teamA, teamB, headless, ownA, ownB) {
   S.bonuses = [bA, bB];
   teamA.forEach(e => { const f = makeFighter(e, 0, bA, gA); S.fighters.push(f); S.occ[f.r * COLS + f.c] = f; });
   teamB.forEach(e => { const f = makeFighter(e, 1, bB, gB); S.fighters.push(f); S.occ[f.r * COLS + f.c] = f; });
+  // trait specials
+  S.fighters.forEach(f => {
+    f.tr = {};
+    if (!f.def) return;
+    const b = S.bonuses[f.side];
+    for (const t in b) { const tr = TRAITS[t]; if (!tr || !tr.sp) continue; if (TRAIT_SP[tr.sp].team || f.def.origin === t || f.def.cls === t) f.tr[tr.sp] = b[t]; }
+    const r = f.tr;
+    if (r.shadowstep) { f.stealthT = r.shadowstep; f.forceCrit = true; }
+    if (r.glamour) f.crit += .2;
+    if (r.manaFlow && f.maxMana) { f.maxMana = Math.max(20, Math.round(f.maxMana * (1 - r.manaFlow / 100))); }
+    if (r.blockWall) f.blocks = r.blockWall;
+    if (r.blink) f.blinkCd = r.blink;
+  });
+  S.fighters.forEach(f => {
+    if (f.tr.pact) [f, ...S.fighters.filter(a => a.side === f.side && a !== f && hexDist(a.r, a.c, f.r, f.c) <= 1)].forEach(a => { a.shield = Math.min(a.maxHp * 1.5, a.shield + f.tr.pact); a.shieldT = Math.max(a.shieldT, 6); });
+    if (f.tr.freshBatch) treat(S, f);
+  });
   // assassins leap to the enemy backline
   S.fighters.filter(f => f.role === 'assassin').forEach(f => {
     const foes = S.fighters.filter(e => e.side !== f.side).sort((a, b) => hexDist(f.r, f.c, b.r, b.c) - hexDist(f.r, f.c, a.r, a.c));
@@ -1067,8 +1130,11 @@ function addFx(S, fx) { if (S.headless) return; fx.t = 0; S.fx.push(fx); }
 
 function dealDamage(S, src, t, amt, kind, crit) {
   if (!t.alive) return 0;
+  if (t.immuneT > 0) { addText(S, t, 'immune', '#ffd84a'); return 0; }
+  if (kind === 'phys' && t.stealthT > 0) { addText(S, t, 'miss', '#b07cff'); return 0; }
+  if (kind === 'phys' && t.blocks > 0) { t.blocks--; addText(S, t, 'Blocked!', '#d6dce8'); return 0; }
   if (kind === 'phys' && t.dodge && Math.random() < t.dodge) { addText(S, t, 'miss', '#9fe8ff'); return 0; }
-  const sf = (src && src.fx) || {}, tf = t.fx || {};
+  const sf = (src && src.fx) || {}, tf = t.fx || {}, st = (src && src.tr) || {}, tt = t.tr || {};
   if (kind === 'magic' && sf.abilityCrit && src.crit && Math.random() < src.crit) { amt *= 1.75 + (sf.critDmg || 0); crit = true; }
   if (sf.giant && t.maxHp > 1600) amt *= 1 + sf.giant;
   if (src && src.exec && t.hp < t.maxHp * .4) amt *= 1 + src.exec / 100;
@@ -1091,6 +1157,10 @@ function dealDamage(S, src, t, amt, kind, crit) {
   t.hp -= amt; t.flash = .12;
   if (t.maxMana > 0 && t.castLock <= 0) t.mana = Math.min(t.maxMana, t.mana + Math.min(pre * .04, 15));
   if (!S.headless && amt >= 1) addText(S, t, r0(amt) + (crit ? '!' : ''), kind === 'magic' ? '#c99bff' : kind === 'true' ? '#ffb37a' : crit ? '#ffcf4a' : '#fff', crit ? 1.25 : 1);
+  if (kind === 'magic' && src !== t) {
+    if (st.ignite) setBurn(t, t.maxHp * st.ignite / 100, 3, src);
+    if (st.overload && !S.overloading) { S.overloading = true; enemiesOf(S, src).filter(e => e !== t && hexDist(e.r, e.c, t.r, t.c) <= 1).forEach(e => dealDamage(S, src, e, pre * st.overload / 100, 'true')); S.overloading = false; }
+  }
   if (kind === 'magic' && sf.burn && src !== t) { t.burnDps = pre * sf.burn / 4; t.burnT = 4; t.burnSrc = src; }
   if (kind !== 'true') {
     if (tf.resolve) addResolve(S, t);
@@ -1103,14 +1173,54 @@ function dealDamage(S, src, t, amt, kind, crit) {
     if (tf.lowShield && !t.lowUsed) { t.lowUsed = true; t.shield += t.maxHp * tf.lowShield; t.shieldT = 5; addText(S, t, 'Shield!', '#e8e8e8'); }
     if (tf.vow && !t.vowUsed) { t.vowUsed = true; t.shield += t.maxHp * .25; t.shieldT = 5; if (t.maxMana) t.mana = Math.min(t.maxMana, t.mana + 30); addText(S, t, 'Oath!', '#e8e8e8'); }
   }
+  if (t.hp > 0 && t.hp < t.maxHp * .5) {
+    if (tt.lifebloom && !t.bloomUsed) { t.bloomUsed = true; heal(S, t, t.maxHp * tt.lifebloom / 100); addFx(S, { type: 'ring', r: t.r, c: t.c, color: '#4fcf5a', dur: .6, rad: 1 }); }
+    if (tt.shadowstep && !t.shadeUsed) { t.shadeUsed = true; t.stealthT = tt.shadowstep; t.forceCrit = true; t.target = null; addText(S, t, 'Vanish!', '#b07cff'); }
+  }
+  if (t.hp > 0 && t.hp < t.maxHp * .25 && tt.sanctuary && !t.sanctUsed) { t.sanctUsed = true; t.immuneT = tt.sanctuary; addText(S, t, 'Sanctuary!', '#ffd84a'); }
   if (t.wind && !t.windUsed && t.hp > 0 && t.hp < t.maxHp * .35) { t.windUsed = true; heal(S, t, t.maxHp * t.wind / 100); addFx(S, { type: 'ring', r: t.r, c: t.c, color: '#bff', dur: .5, rad: 1 }); }
   if (t.hp <= 0) {
     if (tf.revive && !t.revived) { t.revived = true; t.hp = t.maxHp * .4; t.burnT = 0; addText(S, t, 'Reborn!', '#ffb347', 1.3); addFx(S, { type: 'ring', r: t.r, c: t.c, color: '#ffb347', dur: .8, rad: 1.8 }); return amt; }
+    if (tt.reboot && !t.rebooted) { t.rebooted = true; t.hp = t.maxHp * tt.reboot / 100; t.burnT = 0; t.bleedT = 0; addText(S, t, 'Reboot!', '#aab8cc', 1.3); addFx(S, { type: 'ring', r: t.r, c: t.c, color: '#aab8cc', dur: .8, rad: 1.5 }); return amt; }
     t.alive = false; t.hp = 0; S.occ[t.r * COLS + t.c] = null;
     if (src && sf.purse && src.side !== t.side) src.kills = (src.kills || 0) + 1;
+    onDeath(S, t, src);
     if (!S.headless) sfx('die');
   }
   return amt;
+}
+function setBurn(t, dps, dur, src) { t.burnDps = Math.max(t.burnT > 0 ? t.burnDps : 0, dps); t.burnT = Math.max(t.burnT || 0, dur); t.burnSrc = src; }
+function stun(S, t, sec) { if (!t.alive || sec <= 0) return; t.stunT = Math.max(t.stunT || 0, sec); addText(S, t, 'Stunned', '#ffe36a'); }
+function lowestAlly(S, f) { return alliesOf(S, f).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0]; }
+function treat(S, f) { const a = lowestAlly(S, f); if (!a) return; heal(S, a, f.tr.freshBatch); if (a.maxMana) a.mana = Math.min(a.maxMana, a.mana + 10); addFx(S, { type: 'ring', r: a.r, c: a.c, color: '#ff8fc7', dur: .5, rad: .9 }); }
+function rush(S, f) { const v = f.tr && f.tr.sugarRush; if (!v) return; if (!(f.rushT > 0)) f.asBonus += v; f.rushT = 3; }
+function spawnMini(S, t, pct) {
+  const spot = [[t.r, t.c], ...neighbors(t.r, t.c)].find(([r, c]) => !S.occ[r * COLS + c]); if (!spot) return;
+  const m = makeFighter({ u: t.u, r: spot[0], c: spot[1] }, t.side, null, null);
+  m.maxHp = m.hp = t.maxHp * pct / 100; m.isMini = true; m.maxMana = 0; m.mana = 0; m.tr = {}; m.fx = {}; m.items = []; m.ad *= .6;
+  S.fighters.push(m); S.occ[spot[0] * COLS + spot[1]] = m; addText(S, m, 'Split!', '#ff8fc7');
+}
+function onDeath(S, t, src) {
+  enemiesOf(S, t).forEach(a => { if (a.tr && a.tr.bloodlust) a.ad += a.baseAd * a.tr.bloodlust / 100; });
+  if (t.tr && t.tr.nanobots) { alliesOf(S, t).forEach(a => heal(S, a, a.maxHp * t.tr.nanobots / 100)); addFx(S, { type: 'ring', r: t.r, c: t.c, color: '#36c6ff', dur: .7, rad: 3 }); }
+  if (t.tr && t.tr.split && !t.isMini) spawnMini(S, t, t.tr.split);
+  if (src && src.tr && src.side !== t.side) {
+    if (src.tr.popRocks) { addFx(S, { type: 'ring', r: t.r, c: t.c, color: '#ff8fc7', dur: .5, rad: 1.6 }); enemiesOf(S, src).filter(e => hexDist(e.r, e.c, t.r, t.c) <= 1).forEach(e => dealDamage(S, src, e, src.tr.popRocks, 'magic')); }
+    rush(S, src);
+  }
+}
+function teleportNear(S, f, e) {
+  const spot = neighbors(e.r, e.c).filter(([r, c]) => !S.occ[r * COLS + c]).sort((a, b) => hexDist(f.r, f.c, a[0], a[1]) - hexDist(f.r, f.c, b[0], b[1]))[0];
+  if (!spot) return false;
+  S.occ[f.r * COLS + f.c] = null; f.fromR = f.r; f.fromC = f.c; [f.r, f.c] = spot; S.occ[f.r * COLS + f.c] = f; f.moveT = f.moveDur = .25; f.target = e;
+  addFx(S, { type: 'ring', r: f.r, c: f.c, color: '#6bef5c', dur: .4, rad: 1 }); return true;
+}
+function sideTick(S, side) {
+  const sec = Math.floor(S.time);
+  if (sec % 4 === 0) {
+    const tide = S.fighters.find(f => f.alive && f.side === side && f.tr && f.tr.tideWave);
+    if (tide) { S.fighters.forEach(a => { if (a.alive && a.side === side && a.maxMana) a.mana = Math.min(a.maxMana, a.mana + tide.tr.tideWave); }); addFx(S, { type: 'ring', r: tide.r, c: tide.c, color: '#3da5ff', dur: .7, rad: 3 }); }
+  }
 }
 function addResolve(S, f) {
   if ((f.resolve || 0) >= 25) return;
@@ -1122,6 +1232,14 @@ function zap(S, f, t, dmg, n, color) {
   list.forEach(e => { addFx(S, { type: 'bolt', r: e.r, c: e.c, color, dur: .35 }); dealDamage(S, f, e, dmg, 'magic'); });
 }
 function secondTick(S, f) {
+  f.secN = (f.secN || 0) + 1;
+  const r = f.tr || {}, n = f.secN;
+  if (r.triage && n % 3 === 0) { const a = lowestAlly(S, f); if (a) { heal(S, a, r.triage); addFx(S, { type: 'ring', r: a.r, c: a.c, color: '#5dff9a', dur: .5, rad: .9 }); } }
+  if (r.regrowth && n % 4 === 0) { const a = lowestAlly(S, f); if (a) { alliesOf(S, f).filter(x => hexDist(x.r, x.c, a.r, a.c) <= 1).forEach(x => heal(S, x, r.regrowth)); addFx(S, { type: 'ring', r: a.r, c: a.c, color: '#4fcf5a', dur: .6, rad: 1.6 }); } }
+  if (r.hail && n % 4 === 0) shuffle(enemiesOf(S, f)).slice(0, r.hail).forEach(e => S.proj.push({ src: f, tgt: e, dmg: f.ad, kind: 'phys', t: 0, dur: .3, fr: f.r, fc: f.c, color: '#ffe9a8', atk: true, noProc: true }));
+  if (r.refresh && n % 5 === 0) { f.burnT = 0; f.bleedT = 0; f.bleedDps = 0; f.chillT = 0; f.chill = 0; f.stunT = 0; heal(S, f, f.maxHp * r.refresh / 100); addText(S, f, 'Refresh!', '#5fdcaa'); }
+  if (r.freshBatch && n % 6 === 0) treat(S, f);
+  if (r.moonrise && n === 8) { f.ap += r.moonrise; heal(S, f, f.maxHp * .2); addText(S, f, 'Moonrise!', '#9db4ff'); addFx(S, { type: 'ring', r: f.r, c: f.c, color: '#9db4ff', dur: .8, rad: 1.4 }); }
   const ff = f.fx; if (!ff) return;
   if (ff.asPerSec) f.asBonus += ff.asPerSec;
   if (ff.apPerSec) f.ap += ff.apPerSec;
@@ -1138,7 +1256,7 @@ function attack(S, f, t, delay, scale, noProc) {
   f.atkAnim = .26;
   const ff = f.fx || {};
   let dmg = f.ad * (scale || 1) * (ff.twin ? .75 : 1), crit = false;
-  if (f.crit && Math.random() < f.crit) { dmg *= 1.75 + (ff.critDmg || 0); crit = true; }
+  if (f.forceCrit || (f.crit && Math.random() < f.crit)) { dmg *= 1.75 + (ff.critDmg || 0); crit = true; if (!noProc) f.forceCrit = false; }
   if (f.range > 1) {
     const dur = .08 * hexDist(f.r, f.c, t.r, t.c) + .06;
     S.proj.push({ src: f, tgt: t, dmg, kind: 'phys', crit, t: -(delay || 0), dur, fr: f.r, fc: f.c, color: f.color, atk: true, noProc });
@@ -1152,8 +1270,27 @@ function attack(S, f, t, delay, scale, noProc) {
   if (ff.twin) attack(S, f, t, .14, 1, true);
 }
 function landAttack(S, f, t, dmg, crit, noProc) {
+  const r = f.tr || {};
+  if (!noProc) {
+    if (r.longshot) dmg *= 1 + r.longshot / 100 * hexDist(f.r, f.c, t.r, t.c);
+    if (r.pack) { const n = S.fighters.filter(a => a !== f && a.alive && a.side === f.side && a.tr && a.tr.pack && a.target === t).length; dmg *= 1 + r.pack * n / 100; }
+    if (f.blinkDouble) { dmg *= 2; f.blinkDouble = false; }
+  }
   dealDamage(S, f, t, dmg, 'phys', crit);
+  if (t.tr && t.tr.gooey && f.alive) { f.chill = Math.max(f.chill || 0, t.tr.gooey); f.chillT = 2; }
   if (noProc || !f.alive) return;
+  f.hits = (f.hits || 0) + 1;
+  if (r.ignite) setBurn(t, t.maxHp * r.ignite / 100, 3, f);
+  if (r.chill) { t.chill = Math.max(t.chill || 0, r.chill); t.chillT = 2; }
+  if (r.bleed) { t.bleedDps = (t.bleedT > 0 ? t.bleedDps : 0) + f.ad * r.bleed / 100; t.bleedT = 3; t.bleedSrc = f; }
+  if (r.shred) t.armor = Math.max(0, t.armor - r.shred);
+  if (r.drain && t.maxMana) { const m = Math.min(t.mana, r.drain); t.mana -= m; if (f.maxMana) f.mana = Math.min(f.maxMana, f.mana + m); }
+  if (r.glamour && crit) stun(S, t, r.glamour);
+  if (r.candyStun && f.hits % 3 === 0) stun(S, t, r.candyStun);
+  if (r.staticCharge && f.hits % 3 === 0 && live(t)) zap(S, f, t, r.staticCharge, 3, '#f5d03b');
+  if (r.rocket && f.hits % 5 === 0) { addFx(S, { type: 'ring', r: t.r, c: t.c, color: '#ff8a2a', dur: .45, rad: 1.6 }); enemiesOf(S, f).filter(e => hexDist(e.r, e.c, t.r, t.c) <= 1).forEach(e => dealDamage(S, f, e, f.ad * r.rocket / 100, 'phys')); }
+  if (r.bounce) { const o = enemiesOf(S, f).filter(e => e !== t).sort((a, b) => hexDist(a.r, a.c, t.r, t.c) - hexDist(b.r, b.c, t.r, t.c))[0]; if (o) S.proj.push({ src: f, tgt: o, dmg: dmg * r.bounce / 100, kind: 'phys', t: 0, dur: .18, fr: t.r, fc: t.c, color: '#ff3fb4', atk: true, noProc: true }); }
+  if (r.execute && live(t) && t.hp < t.maxHp * r.execute / 100 && !(t.immuneT > 0)) { addText(S, t, 'Executed!', '#ff5d6c', 1.2); dealDamage(S, f, t, t.hp + t.shield + 1, 'true'); }
   const ff = f.fx || {};
   f.hits = (f.hits || 0) + 1;
   if (ff.asPerHit) f.asBonus += ff.asPerHit;
@@ -1166,7 +1303,13 @@ function landAttack(S, f, t, dmg, crit, noProc) {
 function cast(S, f) {
   const cls = f.def.role, P = abilityPower(f.u, f.ap), t = f.target;
   f.mana = 0; f.castLock = .45;
-  const ff = f.fx || {};
+  const ff = f.fx || {}, tr = f.tr || {};
+  if (!f.echoing) {
+    if (tr.sunburst) { addFx(S, { type: 'ring', r: f.r, c: f.c, color: '#ffb83d', dur: .6, rad: 2.6 }); enemiesOf(S, f).filter(e => hexDist(e.r, e.c, f.r, f.c) <= 2).forEach(e => dealDamage(S, f, e, tr.sunburst, 'magic')); }
+    if (tr.fizzCast) alliesOf(S, f).forEach(a => { if (a !== f && a.maxMana) a.mana = Math.min(a.maxMana, a.mana + tr.fizzCast); });
+    if (tr.whipped) alliesOf(S, f).forEach(a => { a.shield = Math.min(a.maxHp * 1.5, a.shield + tr.whipped); a.shieldT = Math.max(a.shieldT, 4); });
+    rush(S, f);
+  }
   if (ff.castAs) { if (!(f.castAsT > 0)) f.asBonus += ff.castAs; f.castAsT = 5; }
   if (ff.manaRefund) f.mana = ff.manaRefund;
   if (ff.castHealAllies) alliesOf(S, f).filter(a => a !== f && hexDist(a.r, a.c, f.r, f.c) <= 1).forEach(a => heal(S, a, a.maxHp * ff.castHealAllies));
@@ -1209,7 +1352,7 @@ function cast(S, f) {
       }
       break;
   }
-  if (ff.echo && !f.echoing && f.alive) {
+  if ((ff.echo || (tr.spellEcho && Math.random() < tr.spellEcho / 100)) && !f.echoing && f.alive) {
     f.echoing = true; const ap0 = f.ap, m0 = f.mana;
     f.ap = (1 + ap0 / 100) * 50 - 100; cast(S, f);
     f.ap = ap0; f.mana = m0; f.echoing = false;
@@ -1233,7 +1376,10 @@ function stepToward(S, f, t) {
 }
 function simStep(S, dt) {
   if (S.over) return;
+  const prevSec = Math.floor(S.time);
   S.time += dt;
+  if (Math.floor(S.time) > prevSec) { sideTick(S, 0); sideTick(S, 1); }
+  const taunters = S.fighters.filter(x => x.alive && x.tr && x.tr.taunt && S.time < x.tr.taunt);
   for (const f of S.fighters) {
     if (!f.alive) { f.deathT += dt; continue; }
     f.flash = Math.max(0, f.flash - dt); f.lunge = Math.max(0, f.lunge - dt); if (f.atkAnim) f.atkAnim = Math.max(0, f.atkAnim - dt);
@@ -1243,16 +1389,24 @@ function simStep(S, dt) {
     f.secT = (f.secT || 0) + dt; if (f.secT >= 1) { f.secT -= 1; secondTick(S, f); }
     if (f.castAsT > 0) { f.castAsT -= dt; if (f.castAsT <= 0) f.asBonus -= f.fx.castAs; }
     if (f.burnT > 0) { f.burnT -= dt; f.burnAcc = (f.burnAcc || 0) + dt; if (f.burnAcc >= .5) { f.burnAcc -= .5; dealDamage(S, f.burnSrc, f, f.burnDps * .5, 'true'); } if (!f.alive) continue; }
+    if (f.bleedT > 0) { f.bleedT -= dt; f.bleedAcc = (f.bleedAcc || 0) + dt; if (f.bleedAcc >= .5) { f.bleedAcc -= .5; dealDamage(S, f.bleedSrc, f, f.bleedDps * .5, 'true'); } if (f.bleedT <= 0) f.bleedDps = 0; if (!f.alive) continue; }
+    if (f.chillT > 0) { f.chillT -= dt; if (f.chillT <= 0) f.chill = 0; }
+    if (f.stealthT > 0) f.stealthT -= dt;
+    if (f.immuneT > 0) f.immuneT -= dt;
+    if (f.rushT > 0) { f.rushT -= dt; if (f.rushT <= 0) f.asBonus -= f.tr.sugarRush; }
+    if (f.stunT > 0) { f.stunT -= dt; continue; }
     if (f.moveT > 0) { f.moveT -= dt; continue; }
     if (f.castLock > 0) { f.castLock -= dt; continue; }
     f.atkCd -= dt;
+    if (f.tr && f.tr.blink) { f.blinkCd -= dt; if (f.blinkCd <= 0) { f.blinkCd = f.tr.blink; const w = enemiesOf(S, f).sort((a, b) => a.hp - b.hp)[0]; if (w && teleportNear(S, f, w)) { f.blinkDouble = true; continue; } } }
+    if (taunters.length) { const tt = taunters.filter(x => x.side !== f.side && hexDist(x.r, x.c, f.r, f.c) <= 2).sort((a, b) => hexDist(a.r, a.c, f.r, f.c) - hexDist(b.r, b.c, f.r, f.c))[0]; if (tt) f.target = tt; }
     if (!live(f.target)) f.target = nearestEnemy(S, f);
     const t = f.target; if (!t) continue;
     const d = hexDist(f.r, f.c, t.r, t.c);
     if (d <= f.range) {
       if (f.maxMana > 0 && f.mana >= f.maxMana) { cast(S, f); continue; }
       if (f.atkCd <= 0) {
-        attack(S, f, t); f.atkCd = 1 / Math.min(5, f.as * (1 + f.asBonus / 100));
+        attack(S, f, t); f.atkCd = 1 / Math.max(.15, Math.min(5, f.as * (1 + f.asBonus / 100) * (1 - (f.chill || 0) / 100)));
         if (f.dbl && Math.random() < f.dbl) attack(S, f, t, .12);
       }
     } else {
@@ -1628,7 +1782,7 @@ function updateUI() {
     c.className = 'tchip' + (tier === 0 ? ' on' : tier === 1 ? ' on2' : tier >= 2 ? ' on3' : '');
     const next = TRAITS[t].tiers.find(x => x > n) || TRAITS[t].tiers[TRAITS[t].tiers.length - 1];
     c.textContent = `${TRAITS[t].icon} ${t} ${n}/${next}`;
-    c.onclick = () => toast(`${t}: ` + TRAITS[t].tiers.map((th, i) => `(${th}) ${TRAITS[t].text(TRAITS[t].vals[i])}`).join(' · '));
+    c.onclick = () => showTraitInfo(t, n);
     tw.appendChild(c);
   });
   (p.augs || []).forEach(f => {
@@ -1683,6 +1837,16 @@ window.addEventListener('pointermove', e => {
 window.addEventListener('pointerup', e => { if (drag && drag.dom) endDrag(e); });
 window.addEventListener('pointercancel', () => { if (drag && drag.dom) { drag = null; hideGhost(); } });
 
+function showTraitInfo(t, n) {
+  const T = TRAITS[t], tier = traitTier(t, n || 0), p = state.player;
+  const owned = new Set(allUnits(p).map(x => x.u.id)), onBoard = new Set(Object.values(p.board).map(u => u.id));
+  let h = `<h3>${T.icon} ${t} <span style="color:var(--muted);font-size:14px">${T.kind === 'origin' ? 'Origin' : 'Class'}${n ? ` · ${n} active` : ''}</span></h3>`;
+  h += T.tiers.map((th, i) => `<div class="ab" style="${i === tier ? 'border-color:#ffc94a;background:#3b3220' : i > tier ? 'opacity:.6' : ''}"><b>(${th})</b> ${T.text(T.vals[i])}</div>`).join('');
+  h += '<div class="sub" style="margin-top:8px">Units with this trait:</div><div class="tunits">' + UNITS.filter(u => u.origin === t || u.cls === t).sort((a, b) => a.cost - b.cost).map(u => `<span class="tu${onBoard.has(u.id) ? ' on' : owned.has(u.id) ? ' own' : ''}" style="border-color:${COST_COLORS[u.cost]}"><img src="${portraitURL(u)}" alt=""><small>${u.name}<br>${u.cost}🪙</small></span>`).join('') + '</div>';
+  h += '<div class="row"><button id="closeBtn">Close</button></div>';
+  openSheet(h);
+}
+
 /* --- info sheet --- */
 function closeSheet() { $('sheet').classList.add('hidden'); }
 function statBox(label, v) { return `<div class="st">${label}<b>${v}</b></div>`; }
@@ -1693,7 +1857,8 @@ function showUnitInfo(u, opts = {}) {
   const P = abilityPower(u, f ? f.ap : s.ap);
   const stars = '★'.repeat(u.star);
   let h = `<img src="${portraitURL(d)}" alt="" style="float:right;width:68px;height:68px;border-radius:50%;border:3px solid ${COST_COLORS[d.cost]}"><h3><span style="color:${COST_COLORS[d.cost]}">${d.name}</span> <span style="color:var(--gold)">${stars}</span></h3>`;
-  h += `<div class="sub">${d.cost}-cost ${ROLE_LABEL[d.role]} · <span class="chip">${TRAITS[d.origin].icon} ${d.origin}</span><span class="chip">${TRAITS[d.cls].icon} ${d.cls}</span></div>`;
+  h += `<div class="sub">${d.cost}-cost ${ROLE_LABEL[d.role]} · <span class="chip tlink" data-t="${d.origin}">${TRAITS[d.origin].icon} ${d.origin} ›</span><span class="chip tlink" data-t="${d.cls}">${TRAITS[d.cls].icon} ${d.cls} ›</span></div>`;
+  h += `<div class="sub" style="font-size:12px">${TRAITS[d.origin].icon} ${TRAIT_SP[TRAITS[d.origin].sp].text(TRAITS[d.origin].vals[0], d.origin).replace(/^./, c => c.toUpperCase())}<br>${TRAITS[d.cls].icon} ${TRAIT_SP[TRAITS[d.cls].sp].text(TRAITS[d.cls].vals[0], d.cls).replace(/^./, c => c.toUpperCase())}</div>`;
   const hp = f ? `${r0(f.hp)}/${f.maxHp}` : r0(s.hp);
   h += `<div class="grid">${statBox('Health', hp)}${statBox('Attack', r0(f ? f.ad : s.ad))}${statBox('Atk Spd', (f ? f.as : s.as).toFixed(2))}${statBox('Range', d.range)}${statBox('Armor', r0(f ? f.armor : s.armor))}${statBox('Magic Res', r0(f ? f.mr : s.mr))}${statBox('Mana', f ? `${r0(f.mana)}/${f.maxMana}` : `${Math.min(s.start, d.mana)}/${d.mana}`)}${statBox('Ability +', r0(f ? f.ap : s.ap) + '%')}</div>`;
   h += `<div class="ab" style="clear:both"><b>${ROLE_ABILITY_NAME[d.role]}</b> — ${ROLE_ABILITY[d.role](P)}</div>`;
@@ -1740,7 +1905,7 @@ function showBotInfo(o) {
   const us = units.sort((a, b) => UNIT[b.id].cost - UNIT[a.id].cost).map(u => `<span class="chip" style="border:1px solid ${COST_COLORS[UNIT[u.id].cost]}">${UNIT[u.id].name} ${'★'.repeat(u.star)}${u.items.length ? ' ' + u.items.map(itemIcon).join('') : ''}</span>`).join('');
   openSheet(`<h3>${o.name}</h3><div class="sub">❤ ${o.hp} · Level ${o.level} · streak ${o.streak > 0 ? '🔥' + o.streak : o.streak < 0 ? '❄️' + (-o.streak) : '-'}</div><div><b>Traits</b><br>${tr}</div><div style="margin-top:8px"><b>Board</b><br>${us}</div>${(o.augs || []).length ? `<div style="margin-top:8px"><b>Augments</b><br>${o.augs.map(f => `<span class="chip">${augBase(f).icon} ${augName(f)}</span>`).join('')}</div>` : ''}<div class="row"><button id="closeBtn">Close</button></div>`);
 }
-function openSheet(h) { const s = $('sheet'); s.innerHTML = h; s.classList.remove('hidden'); const c = $('closeBtn'); if (c) c.onclick = closeSheet; }
+function openSheet(h) { const s = $('sheet'); s.innerHTML = h; s.classList.remove('hidden'); const c = $('closeBtn'); if (c) c.onclick = closeSheet; s.querySelectorAll('.tlink').forEach(el => el.onclick = () => { const t = el.dataset.t; showTraitInfo(t, withEmblems(traitCounts(Object.values(state.player.board)), state.player)[t] || 0); }); }
 
 /* ================= LAYOUT & RENDER ================= */
 let DPR = 1;
@@ -1838,8 +2003,12 @@ function draw() {
       if (!f.alive && f.deathT > .5) continue;
       const { x, y } = fighterPos(f);
       const look = f.creep ? { ring: '#5b5068', star: 1, sprite: fr => creepSprite(f.creep, fr === 'b' || fr === 'c' ? fr : 'a'), sil: creepSil(f.creep), big: f.creep === 'golem' ? 1.3 : 1, fly: f.creep === 'spitter' } : unitLook(f.u, {});
-      Object.assign(look, { side: f.side, hpFrac: f.hp / f.maxHp, manaFrac: f.maxMana ? f.mana / f.maxMana : undefined, flash: f.flash, shieldFrac: f.shield / f.maxHp, alpha: f.alive ? 1 : Math.max(0, 1 - f.deathT * 2), items: f.items, seed: f.fid, hop: f.moveT > 0 && (f.fromR !== f.r || f.fromC !== f.c) ? 1 - f.moveT / f.moveDur : 0, lunge: f.lunge, atk: f.atkAnim || 0, cast: f.castLock > 0 ? f.castLock / .45 : 0, deathT: f.alive ? 0 : f.deathT, face: live(f.target) && cell(f.target.r, f.target.c).x < x - 2 ? -1 : 1 });
+      Object.assign(look, { side: f.side, hpFrac: f.hp / f.maxHp, manaFrac: f.maxMana ? f.mana / f.maxMana : undefined, flash: f.flash, shieldFrac: f.shield / f.maxHp, alpha: f.alive ? (f.stealthT > 0 ? .4 : 1) : Math.max(0, 1 - f.deathT * 2), items: f.items, seed: f.fid, hop: f.moveT > 0 && (f.fromR !== f.r || f.fromC !== f.c) ? 1 - f.moveT / f.moveDur : 0, lunge: f.lunge, atk: f.atkAnim || 0, cast: f.castLock > 0 ? f.castLock / .45 : 0, deathT: f.alive ? 0 : f.deathT, face: live(f.target) && cell(f.target.r, f.target.c).x < x - 2 ? -1 : 1 });
+      if (f.isMini) look.big = .7;
       drawUnitBody(x, y, rad, look);
+      if (f.alive && f.stunT > 0) { ctx.font = `${rad * .7}px system-ui`; ctx.textAlign = 'center'; ctx.fillText('💫', x, y - rad * 2.1); }
+      if (f.alive && f.immuneT > 0) { ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y - rad * .5, rad * 1.3, 0, Math.PI * 2); ctx.stroke(); }
+      if (f.alive && f.blocks > 0) { ctx.font = `700 ${rad * .45}px system-ui`; ctx.fillStyle = '#d6dce8'; ctx.textAlign = 'center'; ctx.fillText('🛡' + f.blocks, x - rad * .9, y + rad * .3); }
     }
     for (const pr of sim.proj) {
       if (pr.t < 0 || pr.melee) continue;
