@@ -2444,15 +2444,18 @@ function init3D() {
     $('stage').insertBefore(canvas, cv);
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.1;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(36, 1, .1, 300);
     Object.assign(R3, { THREE, renderer, scene, camera, canvas, units: new Map(), tex: new Map(), anim: [], v: new THREE.Vector3(), on: true, setId: null, shake: new THREE.Vector3() });
     const { EffectComposer, RenderPass, UnrealBloomPass, OutputPass } = window.T3;
-    R3.composer = new EffectComposer(renderer);
+    const isGL2 = renderer.capabilities.isWebGL2;
+    const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: isGL2 ? 4 : 0 });
+    R3.msaa = isGL2; R3.maxAniso = renderer.capabilities.getMaxAnisotropy();
+    R3.composer = new EffectComposer(renderer, rt);
     R3.composer.addPass(new RenderPass(scene, camera));
-    R3.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), .42, .4, .9);
+    R3.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), .3, .32, .93);
     R3.composer.addPass(R3.bloom);
     R3.composer.addPass(new OutputPass());
     canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); R3.failed = true; R3.on = false; canvas.style.display = 'none'; L && (L.bc = null); toast('3D view lost — switched to classic graphics'); });
@@ -2464,7 +2467,7 @@ function show3D(on) { if (R3.canvas) R3.canvas.style.display = on ? 'block' : 'n
 /* ---- textures ---- */
 function texOf(canvas) {
   let t = R3.tex.get(canvas);
-  if (!t) { const { THREE } = R3; t = new THREE.CanvasTexture(canvas); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; R3.tex.set(canvas, t); }
+  if (!t) { const { THREE } = R3; t = new THREE.CanvasTexture(canvas); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = R3.maxAniso || 4; t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter; R3.tex.set(canvas, t); }
   return t;
 }
 function decorTexture(glow) {
@@ -2691,9 +2694,10 @@ function buildMotes3D() {
 /* ---- camera fit + projection used by the 2D overlay and hit-testing ---- */
 function layout3D() {
   const { THREE, renderer, camera, canvas } = R3, W = L.W, Hb = Math.max(50, L.benchY - 2);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, GFX === 'low' ? 1 : 2));
+  const pr = Math.min(window.devicePixelRatio || 1, GFX === 'low' ? 1 : 2.5);
+  renderer.setPixelRatio(pr);
   renderer.setSize(W, Hb, false); canvas.style.width = W + 'px'; canvas.style.height = Hb + 'px';
-  R3.composer.setSize(W, Hb); R3.bloom.setSize(Math.round(W / 2), Math.round(Hb / 2));
+  R3.composer.setPixelRatio(pr); R3.composer.setSize(W, Hb);
   camera.fov = W / Hb < .9 ? 40 : 34; camera.aspect = W / Hb; camera.updateProjectionMatrix();
   const pitch = 47 * Math.PI / 180; R3.pitch = pitch; const dir = new THREE.Vector3(0, -Math.sin(pitch), -Math.cos(pitch)), target = new THREE.Vector3(0, .3, -5.0);
   const pts = [];
@@ -2737,7 +2741,7 @@ function unitMesh3D(key) {
   let u = R3.units.get(key); if (u) return u;
   const { THREE, scene } = R3;
   const grp = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ alphaTest: .5, transparent: true, side: THREE.DoubleSide, roughness: .75, metalness: 0, emissive: 0xffffff, emissiveIntensity: .22 });
+  const mat = new THREE.MeshStandardMaterial({ alphaTest: .5, alphaToCoverage: !!R3.msaa, transparent: !R3.msaa, side: THREE.DoubleSide, roughness: .75, metalness: 0, emissive: 0xffffff, emissiveIntensity: .2 });
   const spr = new THREE.Mesh(R3.planeGeo, mat); spr.castShadow = true; spr.renderOrder = 2;
   const glowM = new THREE.MeshBasicMaterial({ color: 0x4aa8ff, transparent: true, opacity: .55, depthWrite: false, blending: THREE.AdditiveBlending });
   const glow = new THREE.Mesh(R3.planeGeo, glowM); glow.renderOrder = 1;
@@ -2772,12 +2776,12 @@ function sync3D(now) {
     u.spr.position.set((o.flash > 0 ? (Math.random() - .5) * .12 : 0), bob - w * .055, 0);
     u.spr.rotation.set(pitchTilt, 0, rot);
     u.spr.scale.set(w * sx * face, w * sy, 1);
-    if (o.sil) { const st = texOf(o.sil); if (u.glowM.map !== st) { u.glowM.map = st; u.glowM.needsUpdate = true; } u.glow.visible = GFX !== 'low'; u.glow.position.copy(u.spr.position); u.glow.position.z -= .02; u.glow.rotation.copy(u.spr.rotation); u.glow.scale.set(u.spr.scale.x * 1.09, u.spr.scale.y * 1.05, 1); u.glow.position.y -= w * .02; u.glowM.color.set(o.side === 1 ? '#ff4a6a' : o.ring || '#4aa8ff'); u.glowM.opacity = (o.alpha ?? 1) * (.28 + (o.flash > 0 ? .4 : 0) + (o.cast > 0 ? .35 : 0)); } else u.glow.visible = false;
-    u.mat.opacity = o.alpha ?? 1;
+    if (o.sil) { const st = texOf(o.sil); if (u.glowM.map !== st) { u.glowM.map = st; u.glowM.needsUpdate = true; } u.glow.visible = GFX !== 'low'; u.glow.position.copy(u.spr.position); u.glow.position.z -= .02; u.glow.rotation.copy(u.spr.rotation); u.glow.scale.set(u.spr.scale.x * 1.035, u.spr.scale.y * 1.02, 1); u.glow.position.y -= w * .008; u.glowM.color.set(o.side === 1 ? '#ff4a6a' : o.ring || '#4aa8ff'); u.glowM.opacity = (o.alpha ?? 1) * (.5 + (o.flash > 0 ? .4 : 0) + (o.cast > 0 ? .35 : 0)); } else u.glow.visible = false;
+    const a = o.alpha ?? 1; if (R3.msaa) { const tr = a < .99; if (u.mat.transparent !== tr) { u.mat.transparent = tr; u.mat.needsUpdate = true; } } u.mat.opacity = a;
     u.mat.emissiveIntensity = .22 + (o.flash > 0 ? Math.min(1.6, o.flash * 12) : 0) + (o.cast > 0 ? .5 * Math.sin(o.cast * Math.PI) : 0);
     u.ringM.color.set(o.ring || '#999'); u.ringM.opacity = (o.alpha ?? 1) * .95;
     u.ring.scale.setScalar(big); u.blob.scale.setScalar(big);
-    u.blobM.color.set(o.side === 1 ? '#ff2f55' : '#2a6cff'); u.blobM.opacity = .22;
+    u.blobM.color.set(o.side === 1 ? '#ff2f55' : '#2a6cff'); u.blobM.opacity = .1;
     u.ring.visible = !o.isMini || true;
   };
   const dragging = drag && drag.moved ? drag.hit : null;
