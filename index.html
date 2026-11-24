@@ -66,6 +66,8 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
 .card.rankup{border-color:#ffd84a!important;box-shadow:0 0 0 2px #ffd84a inset,0 0 14px #ffd84aaa;animation:rk 1.1s ease-in-out infinite}
 @keyframes rk{50%{box-shadow:0 0 0 2px #ffd84a inset,0 0 4px #ffd84a55}}
 @media (prefers-reduced-motion:reduce){.card.rankup{animation:none}}
+.card .left{position:absolute;right:4px;top:20px;z-index:2;font-size:9px;color:#cfc9ea;background:#0008;border-radius:5px;padding:1px 3px}
+.card .left.low{color:#ff8a94}
 .card .up{position:absolute;left:3px;top:3px;z-index:2;background:#ffd84a;color:#2a1a00;font-weight:900;font-size:10px;line-height:1;padding:3px 4px;border-radius:6px}
 .card .pips{position:absolute;left:4px;top:3px;z-index:2;font-size:9px;letter-spacing:1px;color:#ffd84a}
 .card .tags{position:absolute;left:3px;top:21px;z-index:2;display:flex;gap:2px}
@@ -191,6 +193,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
   <div class="how" style="margin-top:16px">
     <b>How to play</b><br>
     • Tap shop cards to <b>buy</b> units. Drag them from the bench onto the bottom half of the board.<br>
+    • All 8 players share a <b>limited pool</b> of each unit (18/15/13/10/8 copies by cost). Units in shops are reserved until rerolled, so contested units run out.<br>
     • <b>3 copies</b> of a unit combine into a ★★ unit; 3 ★★ make a ★★★. Shop cards show <b>⚔</b> how many you have in play, <b>🪑</b> on your bench, dots for copies, and glow gold with <b>⬆★★</b> when buying ranks it up.<br>
     • Every unit has an <b>origin</b> and a <b>class</b>. Field 2, 4 or 6 different units of a trait to unlock its <b>special power</b> — burns, chain lightning, revives, stuns, taunts and more. Tap a trait to read it. Each set has its own traits.<br>
     • <b>Assassins</b> (sets 2–4) leap onto the enemy back line when the fight starts.<br>
@@ -475,7 +478,7 @@ function applySet(id) {
 const COST_COLORS = ['', '#9aa4b1', '#3fbf6f', '#3a8ff0', '#b05cff', '#ffb72b'];
 const COST_ABILITY = [0, 170, 230, 300, 390, 520];
 const STAR_HP = [0, 1, 1.8, 3.24], STAR_AB = [0, 1, 1.5, 2.4];
-const POOL_SIZE = [0, 22, 20, 17, 11, 9];
+const POOL_SIZE = [0, 18, 15, 13, 10, 8];
 const ODDS = [null,
   [100, 0, 0, 0, 0], [100, 0, 0, 0, 0], [75, 25, 0, 0, 0], [55, 30, 15, 0, 0], [45, 33, 20, 2, 0],
   [30, 40, 25, 5, 0], [19, 30, 35, 15, 1], [18, 25, 32, 22, 3], [10, 20, 25, 35, 10]];
@@ -1006,7 +1009,19 @@ function pickFromPool(cost) {
 function rollCost(level) { const o = ODDS[level]; let x = Math.random() * 100; for (let i = 0; i < 5; i++) { x -= o[i]; if (x < 0) return i + 1; } return 1; }
 function anyFromPool() { const opts = UNITS.filter(u => state.pool[u.id] > 0); return opts.length ? pick(opts).id : null; }
 function shopPick(o) { return pickFromPool(rollCost(o.level)) || anyFromPool(); }
-function rollShop(o) { o.shop = [0, 0, 0, 0, 0].map(() => shopPick(o)); }
+function reserve(id) { if (id) state.pool[id] = Math.max(0, state.pool[id] - 1); return id; }
+function releaseShop(o) { (o.shop || []).forEach(id => { if (id) state.pool[id]++; }); o.shop = [null, null, null, null, null]; }
+function rollShop(o) { releaseShop(o); o.shop = [0, 0, 0, 0, 0].map(() => reserve(shopPick(o))); }
+function recomputePool() {
+  UNITS.forEach(u => state.pool[u.id] = POOL_SIZE[u.cost]);
+  owners().forEach(o => {
+    if (!o.alive) return;
+    allUnits(o).forEach(x => { if (state.pool[x.u.id] != null) state.pool[x.u.id] -= Math.pow(3, x.u.star - 1); });
+    (o.shop || []).forEach(id => { if (id && state.pool[id] != null) state.pool[id]--; });
+  });
+  if (state.carousel) state.carousel.cards.forEach(c => { if (!c.by && c.id && state.pool[c.id] != null) state.pool[c.id]--; });
+  for (const k in state.pool) state.pool[k] = Math.max(0, state.pool[k]);
+}
 
 function allUnits(o) {
   const out = [];
@@ -1037,8 +1052,8 @@ function checkCombine(o, id) {
     if (o === state.player) { o.combined = keep.u.uid; sfx('star'); celebrate(keep.loc); }
   }
 }
-function giveUnit(o, id) {
-  state.pool[id] = Math.max(0, state.pool[id] - 1);
+function giveUnit(o, id, reserved) {
+  if (!reserved) state.pool[id] = Math.max(0, state.pool[id] - 1);
   const u = newUnit(id);
   const i = freeBench(o);
   if (i >= 0) o.bench[i] = u; else o.bench[9] = u;
@@ -1048,8 +1063,8 @@ function giveUnit(o, id) {
 }
 function buyUnit(o, slot) {
   const id = o.shop[slot]; if (!id) return false;
-  const c = UNIT[id].cost; if (o.gold < c || !canTake(o, id) || state.pool[id] <= 0) return false;
-  o.gold -= c; o.shop[slot] = null; giveUnit(o, id); return true;
+  const c = UNIT[id].cost; if (o.gold < c || !canTake(o, id)) return false;
+  o.gold -= c; o.shop[slot] = null; giveUnit(o, id, true); return true;
 }
 function sellValue(u) { const c = UNIT[u.id].cost; return u.star === 1 ? c : c * Math.pow(3, u.star - 1) - 1; }
 function sellAt(o, loc) {
@@ -1513,7 +1528,7 @@ function unitScore(o, u, counts) {
 }
 function botWants(o, id) {
   const d = UNIT[id];
-  if (copies(o, id) > 0 || copies(o, id, 2) > 0) return true;
+  if (copies(o, id) > 0 || (copies(o, id, 2) > 0 && Math.random() < .6)) return true;
   const total = allUnits(o).length;
   if (total < o.level + 2) return true;
   const counts = traitCounts(allUnits(o).map(x => x.u));
@@ -1521,9 +1536,13 @@ function botWants(o, id) {
 }
 function botTurn(o) {
   const target = botTargetLevel();
-  const reserve = o.hp < 40 ? 0 : state.stage >= 4 ? 30 : state.stage >= 3 ? 20 : 4;
-  while (o.level < target && o.gold >= 4) buyXp(o);
-  for (let g = 0; g < 14; g++) {
+  const reserve = o.hp < 40 ? 0 : state.stage >= 4 ? 30 : state.stage >= 3 ? 24 : 10;
+  while (o.level < target && o.gold >= 4 + (state.stage >= 3 ? 10 : 0)) buyXp(o);
+  // rolling budget per round, like a human: save early, spend more when hurt or late
+  const hard = state.diff === 'hard', easy = state.diff === 'easy';
+  let rolls = state.stage <= 2 ? (o.hp < 50 ? 2 : 0) : state.stage === 3 ? (o.hp < 50 ? 4 : 2) : (o.hp < 40 ? 7 : 4);
+  rolls = Math.round(rolls * (hard ? 1.5 : easy ? .5 : 1));
+  for (let g = 0; g <= rolls; g++) {
     for (let i = 0; i < 5; i++) {
       const id = o.shop[i]; if (!id) continue;
       if (o.gold >= UNIT[id].cost && botWants(o, id)) {
@@ -1531,7 +1550,7 @@ function botTurn(o) {
         buyUnit(o, i);
       }
     }
-    if (o.gold - 2 >= reserve && (state.stage >= 3 || o.hp < 60)) { o.gold -= 2; rollShop(o); } else break;
+    if (g < rolls && o.gold - 2 >= reserve) { o.gold -= 2; rollShop(o); } else break;
   }
   if (o.gold >= 54 && o.level < 9) while (o.gold >= 54 && buyXp(o));
   botArrange(o);
@@ -1565,7 +1584,7 @@ function botArrange(o) {
   const board = Object.values(o.board).sort((a, b) => unitScore(o, b, counts) - unitScore(o, a, counts));
   o.items = o.items.filter(it => { for (const u of board) if (equip(u, it)) return false; return true; });
 }
-function returnToPool(o) { allUnits(o).forEach(x => state.pool[x.u.id] += Math.pow(3, x.u.star - 1)); o.board = {}; o.bench = Array(9).fill(null); }
+function returnToPool(o) { allUnits(o).forEach(x => state.pool[x.u.id] += Math.pow(3, x.u.star - 1)); o.board = {}; o.bench = Array(9).fill(null); releaseShop(o); }
 
 /* ================= ROUND FLOW ================= */
 const roundType = () => (state.stage === 1 || state.round === 6) ? 'pve' : 'pvp';
@@ -1593,7 +1612,7 @@ function beginPlan(first) {
       else { rollShop(o); botTurn(o); }
     }
     if (!p.locked) rollShop(p);
-    else { p.shop = p.shop.map(id => id || shopPick(p)); p.locked = false; p.usedLock = true; }
+    else { p.shop = p.shop.map(id => id || reserve(shopPick(p))); p.locked = false; p.usedLock = true; }
   }
   owners().forEach(o => o.freeRolls = ecoOf(o, 'freeRoll'));
   const tier = AUG_ROUNDS[state.stage + '-' + state.round];
@@ -1730,7 +1749,7 @@ function makeCarousel() {
   const st = state.stage, costs = st === 2 ? [1, 2] : st === 3 ? [2, 3] : st === 4 ? [3, 4] : [3, 4, 5];
   const cards = [];
   for (let i = 0; i < 9; i++) {
-    const id = pickFromPool(pick(costs)) || anyFromPool();
+    const id = reserve(pickFromPool(pick(costs)) || anyFromPool());
     const item = st >= 5 && Math.random() < .5 ? randomCompleted() : pick(COMP_KEYS);
     cards.push({ id, item, by: null });
   }
@@ -1741,7 +1760,7 @@ function carOwner(i) { return i === -1 ? state.player : state.bots[i]; }
 function takeCard(o, k) {
   const c = state.carousel.cards[k]; if (!c || c.by) return;
   c.by = o.name;
-  if (c.id && canTake(o, c.id)) giveUnit(o, c.id); else if (c.id) o.gold += UNIT[c.id].cost;
+  if (c.id && canTake(o, c.id)) giveUnit(o, c.id, true); else if (c.id) { o.gold += UNIT[c.id].cost; state.pool[c.id]++; }
   o.items.push(c.item);
   if (o.isBot) botArrange(o);
 }
@@ -1798,6 +1817,7 @@ function stepCarousel() {
   }, 550);
 }
 function finishCarousel() {
+  if (state.carousel) state.carousel.cards.forEach(c => { if (!c.by && c.id) state.pool[c.id]++; });
   state.carousel = null;
   $('carScreen').classList.add('hidden');
   updateUI(); save();
@@ -1852,7 +1872,7 @@ document.getElementById('augPeek').onclick = () => { $('augScreen').classList.ad
 /* ================= SAVE ================= */
 function save() { try { if (state && state.phase !== 'over') localStorage.setItem(SAVE_KEY, JSON.stringify({ state, difficulty })); } catch (e) { } }
 function load() {
-  try { const d = JSON.parse(localStorage.getItem(SAVE_KEY)); if (!d || !d.state) return false; state = d.state; applySet(state.setId); difficulty = d.difficulty || 'normal'; state.phase = 'plan'; owners().forEach(o => { o.augs ||= []; o.emblems ||= {}; o.freeRolls ||= 0; }); UNITS.forEach(u => { if (state.pool[u.id] == null) state.pool[u.id] = POOL_SIZE[u.cost]; }); return true; } catch (e) { return false; }
+  try { const d = JSON.parse(localStorage.getItem(SAVE_KEY)); if (!d || !d.state) return false; state = d.state; applySet(state.setId); difficulty = d.difficulty || 'normal'; state.phase = 'plan'; owners().forEach(o => { o.augs ||= []; o.emblems ||= {}; o.freeRolls ||= 0; }); recomputePool(); return true; } catch (e) { return false; }
 }
 
 /* ================= UI ================= */
@@ -1900,7 +1920,7 @@ function updateUI() {
     else if (s1) marks += `<span class="pips" title="${s1}/3 copies">${'●'.repeat(s1)}${'○'.repeat(3 - s1)}</span>`;
     if (mine.length) marks += `<div class="tags">${onBoard ? `<span class="tb" title="In play">⚔${onBoard}</span>` : ''}${onBench ? `<span class="tn" title="On bench">🪑${onBench}</span>` : ''}</div>`;
     b.title = rankTo ? `Buying ranks ${d.name} up to ${rankTo}★` : mine.length ? `You own ${onBoard} in play, ${onBench} on bench` : d.name;
-    b.innerHTML = marks + `<span class="cs">${d.cost}🪙</span><img class="pimg" src="${portraitURL(d)}" alt=""><div class="nm">${d.name}</div><div class="tr">${TRAITS[d.origin].icon} ${d.origin}<br>${TRAITS[d.cls].icon} ${d.cls}</div>`;
+    b.innerHTML = marks + `<span class="left${state.pool[id] <= 2 ? ' low' : ''}">${state.pool[id]} left</span><span class="cs">${d.cost}🪙</span><img class="pimg" src="${portraitURL(d)}" alt=""><div class="nm">${d.name}</div><div class="tr">${TRAITS[d.origin].icon} ${d.origin}<br>${TRAITS[d.cls].icon} ${d.cls}</div>`;
     b.disabled = !shopOk || p.gold < d.cost || !canTake(p, id);
     b.onclick = () => { if (buyUnit(p, i)) { sfx('buy'); if (p.combined) { toast(`${UNIT[id].name} ranked up! ⭐`); p.combined = 0; } updateUI(); save(); } };
     shop.appendChild(b);
@@ -1992,6 +2012,7 @@ function showUnitInfo(u, opts = {}) {
   const P = abilityPower(u, f ? f.ap : s.ap);
   const stars = '★'.repeat(u.star);
   let h = `<img src="${portraitURL(d)}" alt="" style="float:right;width:68px;height:68px;border-radius:50%;border:3px solid ${COST_COLORS[d.cost]}"><h3><span style="color:${COST_COLORS[d.cost]}">${d.name}</span> <span style="color:var(--gold)">${stars}</span></h3>`;
+  h += `<div class="sub" style="font-size:12px">🧩 ${state.pool[d.id]} of ${POOL_SIZE[d.cost]} copies left in the shared pool (others are owned or sitting in shops)</div>`;
   h += `<div class="sub">${d.cost}-cost ${ROLE_LABEL[d.role]} · <span class="chip tlink" data-t="${d.origin}">${TRAITS[d.origin].icon} ${d.origin} ›</span><span class="chip tlink" data-t="${d.cls}">${TRAITS[d.cls].icon} ${d.cls} ›</span></div>`;
   h += `<div class="sub" style="font-size:12px">${TRAITS[d.origin].icon} ${TRAIT_SP[TRAITS[d.origin].sp].text(TRAITS[d.origin].vals[0], d.origin).replace(/^./, c => c.toUpperCase())}<br>${TRAITS[d.cls].icon} ${TRAIT_SP[TRAITS[d.cls].sp].text(TRAITS[d.cls].vals[0], d.cls).replace(/^./, c => c.toUpperCase())}</div>`;
   const hp = f ? `${r0(f.hp)}/${f.maxHp}` : r0(s.hp);
