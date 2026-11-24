@@ -22,6 +22,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
 #oppLbl{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #hud .r{display:flex;align-items:center;gap:10px;font-weight:700}
 #hpLbl{color:#ff8a94}#goldLbl{color:var(--gold)}
+#streakLbl{font-size:13px;padding:3px 7px;border-radius:10px;background:var(--panel2);cursor:pointer;white-space:nowrap}#streakLbl.win{color:#ffb36b;border:1px solid #ff7a45}#streakLbl.lose{color:#9fd8ff;border:1px solid #4aa8ff}
 #fightBtn{background:linear-gradient(#ff7a45,#e2442f);padding:8px 14px;border-radius:10px;font-weight:800;box-shadow:0 2px 0 #8d2617;min-width:78px}
 #fightBtn.speed{background:linear-gradient(#5a5480,#403a63);box-shadow:0 2px 0 #26223d}
 #fightBtn:disabled{opacity:.5}
@@ -77,6 +78,22 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
 #sellZone.show{display:flex}
 #sellZone.hot{background:rgba(240,60,80,.97)}
 .hidden{display:none!important}
+#carScreen{background:radial-gradient(circle at 50% 45%,#3a2c5e,rgba(10,8,20,.96) 70%);justify-content:center!important;z-index:36}
+#carScreen h2{margin:0;font-size:26px}#carScreen p{margin:4px 0}
+#carRing{--ring:min(31vw,145px);position:relative;width:calc(var(--ring) * 2 + 80px);height:calc(var(--ring) * 2 + 100px);margin:6px auto}
+.ccard{position:absolute;left:50%;top:50%;width:76px;margin:-48px 0 0 -38px;padding:0;background:none;border:0}
+.ccard .cin{display:flex;flex-direction:column;align-items:center;background:var(--panel2);border:2px solid;border-radius:12px;padding:4px 2px;position:relative}
+.ccard img{width:44px;height:44px;border-radius:50%}
+.ccard b{font-size:11px;line-height:1.1;margin-top:2px}.ccard small{font-size:9px;color:var(--muted);line-height:1.15;max-width:72px}
+.ccard .cit{position:absolute;top:-6px;right:-6px;background:#2a2640;border:1.5px solid #8a84b8;border-radius:8px;font-size:15px;padding:1px 3px}
+.ccard .cit.done{background:#5a4515;border-color:#ffc94a;font-size:11px}
+.ccard.taken{opacity:.35;pointer-events:none}
+.ccard.pickable .cin{box-shadow:0 0 12px #ffc94aaa;border-color:#ffc94a!important}
+.ccenter{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;font-size:15px;pointer-events:none}
+.ccenter small{color:var(--muted)}
+#carOrder{font-size:11px;color:var(--muted);max-width:420px;line-height:1.6}#carOrder .now{color:#ffc94a;font-weight:800}#carOrder .done{text-decoration:line-through;opacity:.6}
+@keyframes carspin{to{transform:rotate(360deg)}}
+
 .tunits{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
 .tu{display:flex;flex-direction:column;align-items:center;width:58px;padding:3px;border-radius:9px;border:2px solid;background:var(--panel2);text-align:center;opacity:.75}
 .tu img{width:40px;height:40px;border-radius:50%}.tu small{font-size:10px;line-height:1.2;color:#ddd}
@@ -139,7 +156,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
 <div id="app">
   <header id="hud">
     <div class="l"><span id="stageLbl">Stage 1-1</span><span id="oppLbl"></span></div>
-    <div class="r"><span id="hpLbl">❤ 100</span><span id="goldLbl">🪙 0</span><button id="fightBtn">Fight!</button></div>
+    <div class="r"><span id="hpLbl">❤ 100</span><span id="goldLbl">🪙 0</span><span id="streakLbl" class="hidden"></span><button id="fightBtn">Fight!</button></div>
   </header>
   <div id="players"></div>
   <div id="traits"></div>
@@ -179,12 +196,21 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
     • Your <b>level</b> = how many units can fight. Every 10 gold you hold earns +1 interest (max 5).<br>
     • Monster rounds drop <b>units, gold and item parts</b> (shown in your 🎒 bag above the shop). Drag one part onto another in your bag (or tap it) to craft a full item, then drag it onto a unit.<br>
     • Every full item has a <b>special effect</b> (tap it to read). From stage 3, monster rounds drop an <b>⚒️ Artifact Anvil</b> — tap it to forge a one-of-a-kind artifact.<br>
+    • <b>Streaks:</b> 2+ wins or losses in a row (🔥/❄️) pay up to +3 bonus gold each round.<br>
+    • At round 4 of every stage (from stage 2) there's a <b>🎠 carousel</b>: lowest health picks first from units carrying items.<br>
+    • You can <b>buy, reroll and level up during fights</b> — new units go to your bench and combine when the fight ends.<br>
     • At <b>2-1, 3-2 and 4-2</b> you pick an <b>augment</b> card — a Silver, Gold or Prismatic power-up for the rest of the game.<br>
     • Drag a unit onto the shop to <b>sell</b> it. Tap anything to see its stats.<br>
     • Lose a fight and you lose HP. Be the last one standing!
   </div>
 </div>
 
+<div id="carScreen" class="screen hidden">
+  <h2>🎠 Carousel</h2>
+  <p>Everyone grabs one unit + item. Lowest health picks first.</p>
+  <div id="carRing"></div>
+  <div id="carOrder"></div>
+</div>
 <div id="augScreen" class="screen hidden">
   <h2 id="augTitle">Choose an Augment</h2>
   <p id="augSub"></p>
@@ -985,11 +1011,14 @@ function getAt(o, loc) { return loc.t === 'board' ? o.board[loc.k] : o.bench[loc
 function setAt(o, loc, u) { if (loc.t === 'board') { if (u) o.board[loc.k] = u; else delete o.board[loc.k]; } else o.bench[loc.i] = u || null; }
 function freeBench(o) { for (let i = 0; i < 9; i++) if (!o.bench[i]) return i; return -1; }
 function copies(o, id, star = 1) { return allUnits(o).filter(x => x.u.id === id && x.u.star === star).length; }
-function canTake(o, id) { return freeBench(o) >= 0 || copies(o, id) >= 2; }
+function midFight(o) { return o === state.player && state.phase === 'combat'; }
+function benchCopies(o, id) { return o.bench.filter(u => u && u.id === id && u.star === 1).length; }
+function canTake(o, id) { return freeBench(o) >= 0 || (midFight(o) ? benchCopies(o, id) : copies(o, id)) >= 2; }
+function canShop() { return state && !transition && !state.carousel && (state.phase === 'plan' || state.phase === 'combat'); }
 
 function checkCombine(o, id) {
   for (let star = 1; star <= 2; star++) {
-    const list = allUnits(o).filter(x => x.u.id === id && x.u.star === star);
+    const list = allUnits(o).filter(x => x.u.id === id && x.u.star === star && !(midFight(o) && x.loc.t === 'board'));
     if (list.length < 3) continue;
     list.sort((a, b) => (a.loc.t === 'board' ? 0 : 1) - (b.loc.t === 'board' ? 0 : 1) || (b.u.items.length - a.u.items.length));
     const keep = list[0], gone = list.slice(1, 3);
@@ -1001,7 +1030,7 @@ function checkCombine(o, id) {
   }
 }
 function giveUnit(o, id) {
-  state.pool[id]--;
+  state.pool[id] = Math.max(0, state.pool[id] - 1);
   const u = newUnit(id);
   const i = freeBench(o);
   if (i >= 0) o.bench[i] = u; else o.bench[9] = u;
@@ -1031,13 +1060,15 @@ function equip(u, it) {
 }
 function addXp(o, n) { o.xp += n; while (o.level < 9 && o.xp >= XP_NEED[o.level]) { o.xp -= XP_NEED[o.level]; o.level++; } if (o.level >= 9) o.xp = 0; }
 function buyXp(o) { if (o.gold < 4 || o.level >= 9) return false; o.gold -= 4; addXp(o, 4 + ecoOf(o, 'xpBuy')); return true; }
-function income(o) {
+function streakGold(o) { const s = Math.abs(o.streak || 0); return s >= 5 ? 3 : s >= 4 ? 2 : s >= 2 ? 1 : 0; }
+function incomeParts(o) {
   const base = state.stage === 1 ? 3 : 5;
   const interest = Math.min(5 + ecoOf(o, 'interest'), Math.floor(o.gold / 10));
-  const s = Math.abs(o.streak), streak = s >= 5 ? 3 : s >= 4 ? 2 : s >= 2 ? 1 : 0;
-  let bonus = 0; if (o.isBot) bonus = state.diff === 'easy' ? -1 : state.diff === 'hard' ? 2 : 0;
-  return Math.max(0, base + interest + streak + bonus + ecoOf(o, 'income'));
+  const streak = streakGold(o);
+  let bonus = ecoOf(o, 'income'); if (o.isBot) bonus += state.diff === 'easy' ? -1 : state.diff === 'hard' ? 2 : 0;
+  return { base, interest, streak, bonus, total: Math.max(0, base + interest + streak + bonus) };
 }
+function income(o) { return incomeParts(o).total; }
 
 /* --- traits --- */
 function traitCounts(units) {
@@ -1544,7 +1575,8 @@ function beginPlan(first) {
   if (!first) {
     for (const o of owners()) {
       if (!o.alive) continue;
-      const inc = income(o); o.gold += inc; addXp(o, 2);
+      const ip = incomeParts(o), inc = ip.total; o.gold += inc; addXp(o, 2);
+      if (o === p) p.lastParts = ip;
       if (o === p) { o.lastIncome = inc; }
       else { rollShop(o); botTurn(o); }
     }
@@ -1566,9 +1598,16 @@ function beginPlan(first) {
   state.phase = 'plan';
   save();
   updateUI();
-  if (!first && p.lastIncome) toast(p.usedLock ? `+${p.lastIncome} gold · locked shop kept (empty slots refilled, lock released)` : `+${p.lastIncome} gold`);
+  if (!first && p.lastIncome) {
+    const ip = p.lastParts || {}, bits = [`${ip.base} base`];
+    if (ip.interest) bits.push(`${ip.interest} interest`);
+    if (ip.streak) bits.push(`${ip.streak} ${p.streak > 0 ? '🔥 win' : '❄️ lose'} streak`);
+    if (ip.bonus) bits.push(`${ip.bonus} augment`);
+    toast(`+${p.lastIncome} gold (${bits.join(' · ')})` + (p.usedLock ? ' · locked shop kept' : ''));
+  }
   p.usedLock = false;
   if (state.augOffer) setTimeout(showAugPicker, 350);
+  else if (!first && state.stage >= 2 && state.round === 4 && !state.carouselDone) { state.carousel = makeCarousel(); state.carouselDone = state.stage + '-4'; save(); setTimeout(showCarousel, 400); }
 }
 function autofill(o) {
   while (boardCount(o) < teamCap(o)) {
@@ -1581,6 +1620,7 @@ function autofill(o) {
 function startCombat() {
   if (state.phase !== 'plan' || transition) return;
   if (state.augOffer) { showAugPicker(); return; }
+  if (state.carousel) { showCarousel(); return; }
   closeSheet();
   const p = state.player;
   autofill(p);
@@ -1646,6 +1686,8 @@ function endCombat() {
     }
   }
   state.bots.forEach(b => { if (b.alive && b.hp <= 0) { b.alive = false; b.hp = 0; state.elim.push(b.name); returnToPool(b); } });
+  state.phase = 'resolve';
+  [...new Set(allUnits(p).map(x => x.u.id))].forEach(id => checkCombine(p, id));
   if (purse) sub += ` · 👛 +${purse} gold`;
   showBanner(title, sub, color);
   sfx(won ? 'win' : 'lose');
@@ -1669,6 +1711,84 @@ function gameOver(place) {
   $('overTitle').textContent = place === 1 ? 'Champion!' : 'Game Over';
   $('overText').textContent = `${SET.name}: ` + (place === 1 ? `You outlasted all 7 rivals at Stage ${state.stage}-${state.round}. 🏆` : `You finished ${place}${sfxs[place] || 'th'} of 8 at Stage ${state.stage}-${state.round}.`);
   $('over').classList.remove('hidden');
+}
+
+/* ================= CAROUSEL ================= */
+function makeCarousel() {
+  const st = state.stage, costs = st === 2 ? [1, 2] : st === 3 ? [2, 3] : st === 4 ? [3, 4] : [3, 4, 5];
+  const cards = [];
+  for (let i = 0; i < 9; i++) {
+    const id = pickFromPool(pick(costs)) || anyFromPool();
+    const item = st >= 5 && Math.random() < .5 ? randomCompleted() : pick(COMP_KEYS);
+    cards.push({ id, item, by: null });
+  }
+  const order = shuffle(owners().filter(o => o.alive)).sort((a, b) => a.hp - b.hp).map(o => o === state.player ? -1 : state.bots.indexOf(o));
+  return { cards, order, pos: 0 };
+}
+function carOwner(i) { return i === -1 ? state.player : state.bots[i]; }
+function takeCard(o, k) {
+  const c = state.carousel.cards[k]; if (!c || c.by) return;
+  c.by = o.name;
+  if (c.id && canTake(o, c.id)) giveUnit(o, c.id); else if (c.id) o.gold += UNIT[c.id].cost;
+  o.items.push(c.item);
+  if (o.isBot) botArrange(o);
+}
+function botCardChoice(o) {
+  const free = state.carousel.cards.map((c, k) => ({ c, k })).filter(x => !x.c.by);
+  free.forEach(x => x.score = (UNIT[x.c.id]?.cost || 0) + (copies(o, x.c.id) ? 3 : 0) + (isComplete(x.c.item) ? 2 : 0) + Math.random() * 1.5);
+  return free.sort((a, b) => b.score - a.score)[0]?.k;
+}
+let carTimer = 0, carSpinStart = 0;
+const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+function spinCarousel(now) {
+  if ($('carScreen').classList.contains('hidden')) return;
+  const rot = reduceMotion ? 0 : ((now - carSpinStart) / 1000) * 9;
+  const R = parseFloat(getComputedStyle($('carRing')).getPropertyValue('--ring')) || 150;
+  document.querySelectorAll('#carRing .ccard').forEach(el => { const a = (+el.dataset.a + rot) * Math.PI / 180; el.style.transform = `translate(${Math.sin(a) * R}px, ${-Math.cos(a) * R}px)`; });
+  requestAnimationFrame(spinCarousel);
+}
+function showCarousel() {
+  const car = state.carousel; if (!car) return;
+  closeSheet(); clearTimeout(carTimer);
+  const wasHidden = $('carScreen').classList.contains('hidden');
+  $('carScreen').classList.remove('hidden');
+  renderCarousel();
+  if (wasHidden) { carSpinStart = performance.now(); requestAnimationFrame(spinCarousel); }
+  stepCarousel();
+}
+function renderCarousel() {
+  const car = state.carousel, ring = $('carRing'); ring.innerHTML = '';
+  const who = car.order[car.pos], myTurn = who === -1;
+  car.cards.forEach((c, k) => {
+    const d = c.id ? UNIT[c.id] : null, a = k / car.cards.length * 360;
+    const el = document.createElement('button');
+    el.className = 'ccard' + (c.by ? ' taken' : '') + (myTurn && !c.by ? ' pickable' : '');
+    el.dataset.a = a;
+    el.innerHTML = `<div class="cin" style="border-color:${d ? COST_COLORS[d.cost] : '#666'}">${d ? `<img src="${portraitURL(d)}" alt="">` : ''}<span class="cit ${isComplete(c.item) ? 'done' : ''}">${itemIcon(c.item)}</span><b>${d ? d.name : '—'}</b><small>${c.by ? '✓ ' + c.by : d ? d.cost + '🪙 · ' + itemName(c.item) : ''}</small></div>`;
+    el.onclick = () => { if (state.carousel && state.carousel.order[state.carousel.pos] === -1 && !c.by) { takeCard(state.player, k); sfx('star'); toast(`You took ${d ? d.name : 'a unit'} + ${itemName(c.item)}!`); state.carousel.pos++; renderCarousel(); updateUI(); stepCarousel(); } };
+    ring.appendChild(el);
+  });
+  const center = document.createElement('div'); center.className = 'ccenter';
+  center.innerHTML = who === undefined ? 'Done!' : myTurn ? '<b>Your pick!</b><br><small>Tap a card</small>' : `<b>${carOwner(who).name}</b><br><small>is picking…</small>`;
+  ring.appendChild(center);
+  $('carOrder').innerHTML = 'Pick order (lowest health first): ' + car.order.map((i, n) => `<span class="${n === car.pos ? 'now' : n < car.pos ? 'done' : ''}">${i === -1 ? 'You' : carOwner(i).name}</span>`).join(' › ');
+}
+function stepCarousel() {
+  const car = state.carousel; if (!car) return;
+  if (car.pos >= car.order.length) { carTimer = setTimeout(finishCarousel, 700); return; }
+  const who = car.order[car.pos];
+  if (who === -1) return;   // wait for the player's tap
+  carTimer = setTimeout(() => {
+    if (state.carousel !== car) return;
+    const o = carOwner(who), k = botCardChoice(o);
+    if (k !== undefined) takeCard(o, k);
+    car.pos++; renderCarousel(); stepCarousel();
+  }, 550);
+}
+function finishCarousel() {
+  state.carousel = null;
+  $('carScreen').classList.add('hidden');
+  updateUI(); save();
 }
 
 /* ================= AUGMENT PICKER ================= */
@@ -1733,20 +1853,23 @@ function hideBanner() { $('banner').classList.add('hidden'); }
 
 function updateUI() {
   if (!state) return;
-  const p = state.player, plan = state.phase === 'plan' && !transition;
+  const p = state.player, plan = state.phase === 'plan' && !transition, shopOk = canShop();
+  const sk = $('streakLbl'), sv = p.streak || 0;
+  if (Math.abs(sv) >= 1) { sk.classList.remove('hidden'); sk.className = sv > 0 ? 'win' : 'lose'; sk.textContent = (sv > 0 ? '🔥' : '❄️') + Math.abs(sv) + (streakGold(p) ? ` +${streakGold(p)}` : ''); }
+  else sk.className = 'hidden';
   $('stageLbl').textContent = `Stage ${state.stage}-${state.round}`;
   $('oppLbl').textContent = roundType() === 'pve' ? (state.stage === 1 ? 'Monsters (unit & item drops)' : 'Monster round (loot drops)') : `vs ${state.bots[state.opp]?.name || '?'}`;
   $('hpLbl').textContent = '❤ ' + Math.max(0, p.hp);
   $('goldLbl').textContent = '🪙 ' + p.gold;
   const fb = $('fightBtn');
   if (state.phase === 'combat') { fb.textContent = `⏩ ${speed}x`; fb.classList.add('speed'); fb.disabled = transition; }
-  else { fb.textContent = state.augOffer ? '🎴 Augment' : 'Fight!'; fb.classList.remove('speed'); fb.disabled = !plan; }
+  else { fb.textContent = state.augOffer ? '🎴 Augment' : state.carousel ? '🎠 Carousel' : 'Fight!'; fb.classList.remove('speed'); fb.disabled = !plan; }
   $('lvl').textContent = p.level;
   $('unitsLbl').textContent = `${boardCount(p)}/${teamCap(p)} units`;
   $('xpFill').style.width = p.level >= 9 ? '100%' : (p.xp / XP_NEED[p.level] * 100) + '%';
   $('xpLbl').textContent = p.level >= 9 ? 'Max level' : `${p.xp}/${XP_NEED[p.level]} XP`;
-  $('xpBtn').disabled = !plan || p.gold < 4 || p.level >= 9;
-  $('rerollBtn').disabled = !plan || (p.gold < 2 && !p.freeRolls);
+  $('xpBtn').disabled = !shopOk || p.gold < 4 || p.level >= 9;
+  $('rerollBtn').disabled = !shopOk || (p.gold < 2 && !p.freeRolls);
   $('rerollBtn').innerHTML = p.freeRolls ? `Reroll<br><small>Free ×${p.freeRolls}</small>` : 'Reroll<br><small>2 🪙</small>';
   $('lockBtn').textContent = p.locked ? '🔒' : '🔓'; $('lockBtn').classList.toggle('locked', p.locked);
   // shop
@@ -1766,7 +1889,7 @@ function updateUI() {
     if (mine.length) marks += `<div class="tags">${onBoard ? `<span class="tb" title="In play">⚔${onBoard}</span>` : ''}${onBench ? `<span class="tn" title="On bench">🪑${onBench}</span>` : ''}</div>`;
     b.title = rankTo ? `Buying ranks ${d.name} up to ${rankTo}★` : mine.length ? `You own ${onBoard} in play, ${onBench} on bench` : d.name;
     b.innerHTML = marks + `<span class="cs">${d.cost}🪙</span><img class="pimg" src="${portraitURL(d)}" alt=""><div class="nm">${d.name}</div><div class="tr">${TRAITS[d.origin].icon} ${d.origin}<br>${TRAITS[d.cls].icon} ${d.cls}</div>`;
-    b.disabled = !plan || p.gold < d.cost || !canTake(p, id);
+    b.disabled = !shopOk || p.gold < d.cost || !canTake(p, id);
     b.onclick = () => { if (buyUnit(p, i)) { sfx('buy'); if (p.combined) { toast(`${UNIT[id].name} ranked up! ⭐`); p.combined = 0; } updateUI(); save(); } };
     shop.appendChild(b);
   });
@@ -1797,7 +1920,7 @@ function updateUI() {
   all.forEach(({ o, i }) => {
     const d = document.createElement('div');
     d.className = 'pchip' + (o === p ? ' me' : '') + (i - 1 === state.opp && o !== p ? ' opp' : '') + (!o.alive ? ' dead' : '');
-    d.innerHTML = `${o.name} <b>${Math.max(0, o.hp)}</b><div class="bar"><i style="width:${Math.max(0, o.hp)}%;background:${o === p ? 'var(--blue)' : o.hp > 50 ? 'var(--green)' : o.hp > 25 ? 'var(--gold)' : 'var(--red)'}"></i></div>`;
+    d.innerHTML = `${o.name} <b>${Math.max(0, o.hp)}</b>${o.alive && Math.abs(o.streak || 0) >= 2 ? (o.streak > 0 ? ` 🔥${o.streak}` : ` ❄️${-o.streak}`) : ''}<div class="bar"><i style="width:${Math.max(0, o.hp)}%;background:${o === p ? 'var(--blue)' : o.hp > 50 ? 'var(--green)' : o.hp > 25 ? 'var(--gold)' : 'var(--red)'}"></i></div>`;
     if (o.isBot && o.alive) d.onclick = () => showBotInfo(o);
     pl.appendChild(d);
   });
@@ -1997,7 +2120,7 @@ function draw() {
   const dy = cell(4, 0).y - s * .75; ctx.strokeStyle = '#ffffff18'; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.moveTo(L.ox, dy); ctx.lineTo(L.ox + SQ3 * s * 7.5, dy); ctx.stroke(); ctx.setLineDash([]);
   const rad = s * .66;
   const dragging = drag && drag.moved ? drag.hit : null;
-  if (state.phase === 'combat' && sim) {
+  if ((state.phase === 'combat' || state.phase === 'resolve') && sim) {
     const fs = sim.fighters.slice().sort((a, b) => a.r - b.r);
     for (const f of fs) {
       if (!f.alive && f.deathT > .5) continue;
@@ -2064,7 +2187,7 @@ function hitTest(x, y) {
   const p = state.player;
   const bi = benchAt(x, y); if (bi >= 0 && p.bench[bi]) return { t: 'bench', i: bi };
   const h = hexAt(x, y); if (!h) return null;
-  if (state.phase === 'combat' && sim) {
+  if ((state.phase === 'combat' || state.phase === 'resolve') && sim) {
     let best = null, bd = L.s; for (const f of sim.fighters) { if (!f.alive) continue; const q = fighterPos(f), d = Math.hypot(q.x - x, q.y - y); if (d < bd) { bd = d; best = f; } }
     return best ? { t: 'fighter', f: best } : null;
   }
@@ -2150,8 +2273,8 @@ $('fightBtn').onclick = () => {
   if (state.phase === 'plan') startCombat();
   else if (state.phase === 'combat') { speed = speed === 1 ? 2 : speed === 2 ? 3 : 1; updateUI(); }
 };
-$('rerollBtn').onclick = () => { const p = state.player; if (state.phase !== 'plan') return; if (p.freeRolls > 0) p.freeRolls--; else if (p.gold >= 2) p.gold -= 2; else return; rollShop(p); sfx('roll'); updateUI(); save(); };
-$('xpBtn').onclick = () => { const p = state.player; if (state.phase !== 'plan') return; const lv = p.level; if (buyXp(p)) { sfx(p.level > lv ? 'star' : 'buy'); if (p.level > lv) toast(`Level ${p.level}! You can field ${p.level} units.`); updateUI(); save(); } };
+$('rerollBtn').onclick = () => { const p = state.player; if (!canShop()) return; if (p.freeRolls > 0) p.freeRolls--; else if (p.gold >= 2) p.gold -= 2; else return; rollShop(p); sfx('roll'); updateUI(); save(); };
+$('xpBtn').onclick = () => { const p = state.player; if (!canShop()) return; const lv = p.level; if (buyXp(p)) { sfx(p.level > lv ? 'star' : 'buy'); if (p.level > lv) toast(`Level ${p.level}! You can field ${teamCap(p)} units${state.phase === 'combat' ? ' next round' : ''}.`); updateUI(); save(); } };
 $('lockBtn').onclick = () => { const p = state.player; p.locked = !p.locked; toast(p.locked ? 'Shop locked: these units stay for next round (empty slots refill)' : 'Shop unlocked: 5 fresh units next round'); updateUI(); save(); };
 window.addEventListener('keydown', e => {
   if (!state || state.phase === 'over' || !$('title').classList.contains('hidden')) return;
@@ -2205,7 +2328,7 @@ function refreshContinue() {
 }
 applySet(chosenSet); renderSetPicker(); refreshContinue();
 $('newBtn').onclick = () => { applySet(chosenSet); $('title').classList.add('hidden'); sim = null; transition = false; newGame(); resize(); };
-$('contBtn').onclick = () => { if (load()) { $('title').classList.add('hidden'); sim = null; resize(); updateUI(); if (state.augOffer) showAugPicker(); } else newGame(); };
+$('contBtn').onclick = () => { if (load()) { $('title').classList.add('hidden'); sim = null; resize(); updateUI(); if (state.augOffer) showAugPicker(); else if (state.carousel) showCarousel(); } else newGame(); };
 $('againBtn').onclick = () => { $('over').classList.add('hidden'); $('title').classList.remove('hidden'); applySet(chosenSet); renderSetPicker(); refreshContinue(); };
 window.addEventListener('resize', () => { resize(); });
 resize();
