@@ -196,7 +196,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
     • All 8 players share a <b>limited pool</b> of each unit (18/15/13/10/8 copies by cost). Units in shops are reserved until rerolled, so contested units run out.<br>
     • <b>3 copies</b> of a unit combine into a ★★ unit; 3 ★★ make a ★★★. Shop cards show <b>⚔</b> how many you have in play, <b>🪑</b> on your bench, dots for copies, and glow gold with <b>⬆★★</b> when buying ranks it up.<br>
     • Every unit has an <b>origin</b> and a <b>class</b>. Field 2, 4 or 6 different units of a trait to unlock its <b>special power</b> — burns, chain lightning, revives, stuns, taunts and more. Tap a trait to read it. Each set has its own traits.<br>
-    • <b>Assassins</b> (sets 2–4) leap onto the enemy back line when the fight starts.<br>
+    • Units always fight the <b>nearest enemy</b>. Only abilities reach the back line — e.g. <b>Assassins</b> (sets 2–4) leap behind the farthest enemy when they cast.<br>
     • Your <b>level</b> = how many units can fight. Every 10 gold you hold earns +1 interest (max 5).<br>
     • Monster rounds drop <b>units, gold and item parts</b> (shown in your 🎒 bag above the shop). Drag one part onto another in your bag (or tap it) to craft a full item, then drag it onto a unit.<br>
     • Every full item has a <b>special effect</b> (tap it to read). From stage 3, monster rounds drop an <b>⚒️ Artifact Anvil</b> — tap it to forge a one-of-a-kind artifact.<br>
@@ -267,7 +267,7 @@ const TRAIT_SP = {
   spellEcho:   { team: true, text: v => `abilities have a ${v}% chance to cast a second time at half power.` },
   reboot:      { text: v => `the first time one is destroyed, it reboots with ${v}% health.` },
   bounce:      { text: v => `attacks bounce to a second enemy for ${v}% damage.` },
-  blink:       { text: v => `every ${v}s, teleport next to the weakest enemy; the next attack deals double damage.` },
+  blink:       { text: v => `after casting an ability, dash next to the weakest enemy; the next attack deals +${v}% damage.` },
   overload:    { text: v => `abilities overload, dealing ${v}% of their damage again to enemies next to the target.` },
   nanobots:    { text: v => `when one is destroyed, its nanobots heal every ally for ${v}% of their max health.` },
   taunt:       { text: v => `for the first ${v}s of combat, enemies within 2 hexes are forced to attack them.` },
@@ -282,7 +282,7 @@ const TRAIT_SP = {
   glamour:     { text: v => `gain 20% crit chance, and critical strikes stun the target for ${v}s.` },
   blockWall:   { text: v => `completely block the first ${v} attacks they take each combat.` },
   bleed:       { text: v => `attacks cause bleeding for ${v}% of attack damage per second for 3s (stacks).` },
-  hail:        { text: v => `every 4 seconds, loose arrows at ${v} extra random ${v === 1 ? 'enemy' : 'enemies'}.` },
+  hail:        { text: v => `every 4 seconds, loose arrows at their target and the ${v === 1 ? 'enemy' : v + ' enemies'} closest to it.` },
   regrowth:    { text: v => `every 4 seconds, heal the lowest-health ally and its neighbours for ${v}.` },
   manaFlow:    { text: v => `abilities cost ${v}% less mana.` },
   sugarRush:   { text: v => `gain +${v}% attack speed for 3s after casting or getting a takedown.` },
@@ -305,7 +305,7 @@ const ROLE_BASE = {
   marksman: { hp: 480, ad: 52, as: .75, range: 4, armor: 20, mr: 20, mana: 60, start: 0 },
   healer:   { hp: 520, ad: 38, as: .65, range: 3, armor: 20, mr: 30, mana: 70, start: 20 },
   mage:     { hp: 480, ad: 40, as: .65, range: 3, armor: 20, mr: 25, mana: 75, start: 20 },
-  assassin: { hp: 540, ad: 64, as: .75, range: 1, armor: 25, mr: 20, mana: 60, start: 10 },
+  assassin: { hp: 560, ad: 64, as: .75, range: 1, armor: 28, mr: 22, mana: 55, start: 25 },
 };
 const ROLE_LABEL = { tank: 'Tank', bruiser: 'Fighter', marksman: 'Marksman', healer: 'Healer', mage: 'Mage', assassin: 'Assassin' };
 const ROLE_ABILITY_NAME = { tank: 'Bulwark', bruiser: 'Rend', marksman: 'Volley', healer: 'Mend', mage: 'Nova', assassin: 'Ambush' };
@@ -315,7 +315,7 @@ const ROLE_ABILITY = {
   marksman: P => `Fires bolts at the target and the 2 enemies closest to it, each dealing ${r0(P * .8)} magic damage.`,
   healer: P => `Heals the lowest-health ally for ${r0(P * 1.1)} and gives them 15 mana.`,
   mage: P => `Blasts the target and every enemy next to it for ${r0(P * 1.1)} magic damage.`,
-  assassin: P => `Leaps to the enemy backline when combat starts. Ability: slashes the target for ${r0(P * 1.8)} magic damage, then hunts the lowest-health enemy.`,
+  assassin: P => `Leaps behind the farthest enemy (their back line) and slashes it for ${r0(P * 1.8)} magic damage.`,
 };
 
 /* ---------- SETS ---------- */
@@ -358,7 +358,7 @@ const SETS = [
     origins: [
       { name: 'Chrome', icon: '🔩', color: '#aab8cc', sp: 'reboot', vals: [20, 35, 60] },
       { name: 'Neon',   icon: '💡', color: '#ff3fb4', sp: 'bounce', vals: [30, 50, 80] },
-      { name: 'Glitch', icon: '👾', color: '#6bef5c', sp: 'blink', vals: [6, 4, 2.5] },
+      { name: 'Glitch', icon: '👾', color: '#6bef5c', sp: 'blink', vals: [60, 100, 160] },
       { name: 'Plasma', icon: '☄️', color: '#ff8a2a', sp: 'overload', vals: [30, 50, 80] },
       { name: 'Nano',   icon: '🧬', color: '#36c6ff', sp: 'nanobots', vals: [10, 20, 35] },
     ],
@@ -1161,14 +1161,6 @@ function buildSim(teamA, teamB, headless, ownA, ownB) {
     if (f.tr.pact) [f, ...S.fighters.filter(a => a.side === f.side && a !== f && hexDist(a.r, a.c, f.r, f.c) <= 1)].forEach(a => { a.shield = Math.min(a.maxHp * 1.5, a.shield + f.tr.pact); a.shieldT = Math.max(a.shieldT, 6); });
     if (f.tr.freshBatch) treat(S, f);
   });
-  // assassins leap to the enemy backline
-  S.fighters.filter(f => f.role === 'assassin').forEach(f => {
-    const foes = S.fighters.filter(e => e.side !== f.side).sort((a, b) => hexDist(f.r, f.c, b.r, b.c) - hexDist(f.r, f.c, a.r, a.c));
-    for (const e of foes) {
-      const spot = neighbors(e.r, e.c).find(([r, c]) => !S.occ[r * COLS + c]);
-      if (spot) { const dist = hexDist(f.r, f.c, spot[0], spot[1]); S.occ[f.r * COLS + f.c] = null; f.fromR = f.r; f.fromC = f.c; [f.r, f.c] = spot; S.occ[f.r * COLS + f.c] = f; f.moveT = f.moveDur = .55 + dist * .16; f.leap = true; f.target = e; break; }
-    }
-  });
   return S;
 }
 const live = f => f && f.alive;
@@ -1293,7 +1285,7 @@ function secondTick(S, f) {
   const r = f.tr || {}, n = f.secN;
   if (r.triage && n % 3 === 0) { const a = lowestAlly(S, f); if (a) { heal(S, a, r.triage); addFx(S, { type: 'ring', r: a.r, c: a.c, color: '#5dff9a', dur: .5, rad: .9 }); } }
   if (r.regrowth && n % 4 === 0) { const a = lowestAlly(S, f); if (a) { alliesOf(S, f).filter(x => hexDist(x.r, x.c, a.r, a.c) <= 1).forEach(x => heal(S, x, r.regrowth)); addFx(S, { type: 'ring', r: a.r, c: a.c, color: '#4fcf5a', dur: .6, rad: 1.6 }); } }
-  if (r.hail && n % 4 === 0) shuffle(enemiesOf(S, f)).slice(0, r.hail).forEach(e => S.proj.push({ src: f, tgt: e, dmg: f.ad, kind: 'phys', t: 0, dur: .3, fr: f.r, fc: f.c, color: '#ffe9a8', atk: true, noProc: true }));
+  if (r.hail && n % 4 === 0 && live(f.target)) enemiesOf(S, f).sort((a, b) => hexDist(a.r, a.c, f.target.r, f.target.c) - hexDist(b.r, b.c, f.target.r, f.target.c)).slice(0, r.hail).forEach(e => S.proj.push({ src: f, tgt: e, dmg: f.ad, kind: 'phys', t: 0, dur: .3, fr: f.r, fc: f.c, color: '#ffe9a8', atk: true, noProc: true }));
   if (r.refresh && n % 5 === 0) { f.burnT = 0; f.bleedT = 0; f.bleedDps = 0; f.chillT = 0; f.chill = 0; f.stunT = 0; heal(S, f, f.maxHp * r.refresh / 100); addText(S, f, 'Refresh!', '#5fdcaa'); }
   if (r.freshBatch && n % 6 === 0) treat(S, f);
   if (r.moonrise && n === 8) { f.ap += r.moonrise; heal(S, f, f.maxHp * .2); addText(S, f, 'Moonrise!', '#9db4ff'); addFx(S, { type: 'ring', r: f.r, c: f.c, color: '#9db4ff', dur: .8, rad: 1.4 }); }
@@ -1331,7 +1323,7 @@ function landAttack(S, f, t, dmg, crit, noProc) {
   if (!noProc) {
     if (r.longshot) dmg *= 1 + r.longshot / 100 * hexDist(f.r, f.c, t.r, t.c);
     if (r.pack) { const n = S.fighters.filter(a => a !== f && a.alive && a.side === f.side && a.tr && a.tr.pack && a.target === t).length; dmg *= 1 + r.pack * n / 100; }
-    if (f.blinkDouble) { dmg *= 2; f.blinkDouble = false; }
+    if (f.blinkDouble) { dmg *= 1 + (r.blink || 100) / 100; f.blinkDouble = false; }
   }
   dealDamage(S, f, t, dmg, 'phys', crit);
   if (t.tr && t.tr.gooey && f.alive) { f.chill = Math.max(f.chill || 0, t.tr.gooey); f.chillT = 2; }
@@ -1367,6 +1359,7 @@ function cast(S, f) {
     if (tr.fizzCast) alliesOf(S, f).forEach(a => { if (a !== f && a.maxMana) a.mana = Math.min(a.maxMana, a.mana + tr.fizzCast); });
     if (tr.whipped) alliesOf(S, f).forEach(a => { a.shield = Math.min(a.maxHp * 1.5, a.shield + tr.whipped); a.shieldT = Math.max(a.shieldT, 4); });
     rush(S, f);
+    if (tr.blink && f.alive) { f.blinkDouble = true; if (f.role !== 'assassin') { const w = enemiesOf(S, f).sort((a, b) => a.hp - b.hp)[0]; if (w) teleportNear(S, f, w); } }
   }
   if (ff.castAs) { if (!(f.castAsT > 0)) f.asBonus += ff.castAs; f.castAsT = 5; }
   if (ff.manaRefund) f.mana = ff.manaRefund;
@@ -1403,12 +1396,23 @@ function cast(S, f) {
         addFx(S, { type: 'ring', r: tr, c: tc, color: f.color, dur: .5, rad: 2.2 });
       }
       break;
-    case 'assassin':
-      if (live(t)) {
-        dealDamage(S, f, t, P * 1.8, 'magic'); addFx(S, { type: 'slash', r: t.r, c: t.c, color: f.color, dur: .4 });
-        const low = enemiesOf(S, f).sort((a, b) => a.hp - b.hp)[0]; if (low) f.target = low;
+    case 'assassin': {
+      // leap behind the farthest enemy (their back line) and slash it on landing
+      const foes = enemiesOf(S, f).sort((a, b) => hexDist(f.r, f.c, b.r, b.c) - hexDist(f.r, f.c, a.r, a.c));
+      let done = false;
+      for (const e of foes) {
+        const spots = neighbors(e.r, e.c).filter(([r, c]) => !S.occ[r * COLS + c]);
+        if (!spots.length) continue;
+        spots.sort((a, b) => (f.side === 0 ? a[0] - b[0] : b[0] - a[0]));   // prefer the side behind the target
+        const spot = spots[0], dist = hexDist(f.r, f.c, spot[0], spot[1]);
+        S.occ[f.r * COLS + f.c] = null; f.fromR = f.r; f.fromC = f.c; [f.r, f.c] = spot; S.occ[f.r * COLS + f.c] = f;
+        f.moveT = f.moveDur = .45 + dist * .13; f.leap = true; f.target = e;
+        S.proj.push({ src: f, tgt: e, dmg: P * 1.8, kind: 'magic', t: -(f.moveDur - .02), dur: .01, melee: true, slash: true, color: f.color, fr: f.r, fc: f.c });
+        done = true; break;
       }
+      if (!done && live(t)) { dealDamage(S, f, t, P * 1.8, 'magic'); addFx(S, { type: 'slash', r: t.r, c: t.c, color: f.color, dur: .4 }); }
       break;
+    }
   }
   if ((ff.echo || (tr.spellEcho && Math.random() < tr.spellEcho / 100)) && !f.echoing && f.alive) {
     f.echoing = true; const ap0 = f.ap, m0 = f.mana;
@@ -1456,7 +1460,6 @@ function simStep(S, dt) {
     if (f.moveT > 0) { f.moveT -= dt; if (f.moveT <= 0) { f.leap = false; f.dash = false; } continue; }
     if (f.castLock > 0) { f.castLock -= dt; continue; }
     f.atkCd -= dt;
-    if (f.tr && f.tr.blink) { f.blinkCd -= dt; if (f.blinkCd <= 0) { f.blinkCd = f.tr.blink; const w = enemiesOf(S, f).sort((a, b) => a.hp - b.hp)[0]; if (w && teleportNear(S, f, w)) { f.blinkDouble = true; continue; } } }
     if (taunters.length) { const tt = taunters.filter(x => x.side !== f.side && hexDist(x.r, x.c, f.r, f.c) <= 2).sort((a, b) => hexDist(a.r, a.c, f.r, f.c) - hexDist(b.r, b.c, f.r, f.c))[0]; if (tt) f.target = tt; }
     if (!live(f.target)) f.target = nearestEnemy(S, f);
     const t = f.target; if (!t) continue;
@@ -1475,7 +1478,7 @@ function simStep(S, dt) {
   }
   for (const p of S.proj) {
     p.t += dt;
-    if (p.t >= p.dur && !p.done) { p.done = true; if (live(p.tgt)) { if (p.atk) landAttack(S, p.src, p.tgt, p.dmg, p.crit, p.noProc); else dealDamage(S, p.src, p.tgt, p.dmg, p.kind, p.crit); if (p.melee && p.src.alive) p.src.lunge = .18; } }
+    if (p.t >= p.dur && !p.done) { p.done = true; if (live(p.tgt)) { if (p.atk) landAttack(S, p.src, p.tgt, p.dmg, p.crit, p.noProc); else dealDamage(S, p.src, p.tgt, p.dmg, p.kind, p.crit); if (p.melee && p.src.alive) p.src.lunge = .18; if (p.slash) addFx(S, { type: 'slash', r: p.tgt.r, c: p.tgt.c, color: p.color || '#fff', dur: .4 }); } }
   }
   S.proj = S.proj.filter(p => !p.done);
   for (const x of S.fx) x.t += dt; S.fx = S.fx.filter(x => x.t < x.dur);
@@ -1564,7 +1567,7 @@ function botSellWeak(o) {
 }
 const COL_ORDER = [3, 2, 4, 1, 5, 0, 6];
 function placeUnits(o, units) {
-  const melee = units.filter(u => UNIT[u.id].range <= 1 && UNIT[u.id].role !== 'assassin'), ranged = units.filter(u => !melee.includes(u));
+  const melee = units.filter(u => UNIT[u.id].range <= 1), ranged = units.filter(u => !melee.includes(u));
   const spots = (rows) => rows.flatMap(r => COL_ORDER.map(c => key(r, c))).filter(k => !o.board[k]);
   const ms = spots([4, 5, 6, 7]), rs = spots([7, 6, 5, 4]);
   melee.forEach(u => { const k = ms.find(k => !o.board[k]); o.board[k] = u; });
