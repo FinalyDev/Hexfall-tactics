@@ -1,6 +1,6 @@
 # Hexfall Tactics
 
-Now with a **3D arena**: a tilted camera over a raised hex battlefield with lit tiles, depth-scaled heroes, arcing projectiles and ground-level effects.
+Rendered in real **WebGL 3D with three.js** (HD-2D style): anime heroes stand as lit billboards in a 3D arena with sun shadows, beveled stone tiles, bloom glow, a painted sky dome, set-themed scenery (sunset mountains, neon skyline, moonlit forest & castle, candy hills), floating 3D particles and a cinematic camera. Falls back to a 2.5D canvas renderer (or a battery-saving Low mode) on devices without WebGL.
 
 An offline, single-player auto-battler that runs in your browser. Draft units from a shop, combine 3 copies to rank them up, stack traits, build items from monster drops, and outlast 7 AI rivals.
 
