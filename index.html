@@ -49,6 +49,11 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
 .sbtn:disabled{opacity:.45}
 #lockBtn{min-width:40px}
 #lockBtn.locked{border-color:var(--gold);background:#3b3220}
+#charmBar{display:flex;align-items:center;gap:8px;margin:0 0 6px;padding:6px 8px;border-radius:10px;background:linear-gradient(90deg,#3b2a5e,#2a2346);border:1px solid #b58cff88;box-shadow:0 0 12px #b58cff44;animation:charmIn .35s ease-out}
+#charmBar.ready{background:#231f38;border-color:#5dff9a66;box-shadow:none}
+#charmBar .ci{font-size:24px}#charmBar .ct{flex:1;display:flex;flex-direction:column;line-height:1.2;min-width:0}#charmBar .ct b{font-size:13px}#charmBar .ct small{font-size:11px;color:#d8d3ee}
+#charmBar button{border:0;border-radius:8px;padding:8px 10px;font-weight:800;background:linear-gradient(#ffd86b,#f0a93a);color:#2a1b05;white-space:nowrap}#charmBar button:disabled{opacity:.45}
+@keyframes charmIn{from{transform:translateY(6px);opacity:0}to{transform:none;opacity:1}}
 #shop{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
 .card{position:relative;height:104px;border-radius:9px;background:var(--panel2);border:2px solid var(--line);padding:4px;display:flex;flex-direction:column;justify-content:space-between;text-align:left;overflow:hidden}
 .card .nm{font-weight:800;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative;z-index:1}
@@ -174,6 +179,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
       <button class="sbtn" id="rerollBtn">Reroll<br><small>2 🪙</small></button>
       <button class="sbtn" id="lockBtn" title="Lock shop">🔓</button>
     </div>
+    <div id="charmBar" class="hidden"><span class="ci" id="charmIcon"></span><span class="ct"><b id="charmName"></b><small id="charmText"></small></span><button id="charmBuy"></button></div>
     <div id="shop"></div>
     <div id="sellZone">Drop to sell</div>
   </div>
@@ -196,6 +202,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
   <div class="how" style="margin-top:16px">
     <b>How to play</b><br>
     • Tap shop cards to <b>buy</b> units. Drag them from the bench onto the bottom half of the board.<br>
+    • From stage 2, <b>every other shop</b> shows a <b>charm</b> above the shop: a one-time buy (max one per round). There are 27 kinds: gold and XP deals, free units and items, healing, and charms that buff your team or curse the enemy in the next fight. Rerolling past one loses it.<br>
     • All 8 players share a <b>limited pool</b> of each unit (18/15/13/10/8 copies by cost). Units in shops are reserved until rerolled, so contested units run out.<br>
     • <b>3 copies</b> of a unit combine into a ★★ unit; 3 ★★ make a ★★★. Shop cards show <b>⚔</b> how many you have in play, <b>🪑</b> on your bench, dots for copies, and glow gold with <b>⬆★★</b> when buying ranks it up.<br>
     • Every unit has an <b>origin</b> and a <b>class</b>. Field 2, 4 or 6 different units of a trait to unlock its <b>special power</b> — burns, chain lightning, revives, stuns, taunts and more. Tap a trait to read it. Each set has its own traits.<br>
@@ -950,6 +957,120 @@ const augArg = full => full.split('|')[1];
 function augName(full) { const a = augBase(full), t = augArg(full); return a.crest ? `${t} ${a.name}` : a.name; }
 function augDesc(full) { return augBase(full).desc(augArg(full)); }
 function ecoOf(o, k) { let n = 0; (o.augs || []).forEach(f => { const a = augBase(f); if (a && a.eco && a.eco[k]) n += a.eco[k]; }); return n; }
+/* ================= CHARMS ================= */
+const CHARMS = {
+  // economy
+  piggy:   { name: 'Piggy Bank',      icon: '🐷', cost: 2, kind: 'now',   w: 3, text: 'Pays out 5 gold at the start of next round.' },
+  spins:   { name: 'Free Spins',      icon: '🎰', cost: 1, kind: 'now',   w: 3, text: 'Gain 3 free rerolls this round.' },
+  loan:    { name: 'Lucky Loan',      icon: '🤝', cost: 0, kind: 'now',   w: 2, text: 'Get 8 gold now. Next round, 10 gold is collected back.' },
+  compound:{ name: 'Compound Coin',   icon: '🏦', cost: 2, kind: 'now',   w: 2, text: 'Next round, your interest is paid twice.' },
+  jackpot: { name: 'Jackpot',         icon: '🎲', cost: 3, kind: 'now',   w: 2, text: 'Flip a coin: heads wins 8 gold, tails wins nothing.' },
+  // xp
+  tome:    { name: 'Study Tome',      icon: '📘', cost: 3, kind: 'now',   w: 3, text: 'Gain 6 XP.' },
+  map:     { name: 'Old Map',         icon: '🗺️', cost: 2, kind: 'now',   w: 2, text: 'Gain 4 XP and a free reroll.' },
+  // units
+  mirror:  { name: 'Mirror Shard',    icon: '🪞', cost: 5, kind: 'now',   w: 2, text: 'Copy a random 1-3 cost unit you own (from the shared pool).' },
+  recruit: { name: 'Recruit Flyer',   icon: '📣', cost: 2, kind: 'now',   w: 3, text: 'Gain a random 2-cost unit.' },
+  scout:   { name: 'Talent Scout',    icon: '🔭', cost: 4, kind: 'now',   w: 2, text: 'Gain a random 4-cost unit.' },
+  starseed:{ name: 'Star Seed',       icon: '🌟', cost: 6, kind: 'now',   w: 1, text: 'A random ★ 1- or 2-cost unit you own grows to ★★.' },
+  // items
+  parts:   { name: 'Spare Parts',     icon: '🧰', cost: 4, kind: 'now',   w: 3, text: 'Gain a random item component.' },
+  forge:   { name: 'Pocket Forge',    icon: '🔨', cost: 7, kind: 'now',   w: 1, text: 'Gain a random completed item.' },
+  anvil:   { name: 'Lucky Anvil',     icon: '⚒️', cost: 8, kind: 'now',   w: 1, text: 'Gain an Artifact Anvil.' },
+  badge:   { name: 'Trait Badge',     icon: '🎖️', cost: 6, kind: 'now',   w: 1, text: 'Permanently count +1 toward a random trait on your board.' },
+  // player
+  spring:  { name: 'Healing Spring',  icon: '⛲', cost: 3, kind: 'now',   w: 2, text: 'Restore 4 player health.' },
+  // next fight: buffs
+  drum:    { name: 'War Drum',        icon: '🥁', cost: 3, kind: 'fight', w: 2, text: 'Next fight: your team gets +25% attack speed for the first 6 seconds.' },
+  ward:    { name: 'Iron Ward',       icon: '🛡️', cost: 2, kind: 'fight', w: 2, text: 'Next fight: every ally starts with a shield worth 15% of its health.' },
+  hymn:    { name: 'Battle Hymn',     icon: '🎺', cost: 3, kind: 'fight', w: 2, text: 'Next fight: every ally starts with +25 mana.' },
+  wind:    { name: 'Second Wind',     icon: '🪽', cost: 3, kind: 'fight', w: 2, text: 'Next fight: the first ally to fall gets back up with 40% health.' },
+  fang:    { name: 'Vampire Fang',    icon: '🦇', cost: 3, kind: 'fight', w: 2, text: 'Next fight: your team heals for 15% of the damage it deals.' },
+  potion:  { name: 'Growth Potion',   icon: '🧪', cost: 4, kind: 'fight', w: 2, text: 'Next fight: your units have +20% max health.' },
+  rally:   { name: 'Rally Banner',    icon: '🚩', cost: 2, kind: 'fight', w: 2, text: 'Next fight: whenever an ally falls, the rest gain +20% attack damage (stacks).' },
+  bounty:  { name: 'Bounty Poster',   icon: '📜', cost: 1, kind: 'fight', w: 2, text: 'Win your next fight to collect 5 gold.' },
+  // next fight: hurt the enemy
+  bomb:    { name: 'Fire Bomb',       icon: '💣', cost: 2, kind: 'fight', w: 2, text: 'Next fight: after 1.5s a bomb lands on the most crowded enemy spot, hitting it and everyone next to it.' },
+  frost:   { name: 'Frost Charm',     icon: '❄️', cost: 2, kind: 'fight', w: 2, text: 'Next fight: every enemy starts frozen for 1.2 seconds.' },
+  doll:    { name: 'Hex Doll',        icon: '🪆', cost: 2, kind: 'fight', w: 2, text: 'Next fight: the strongest enemy starts with 30% less max health.' },
+};
+const CHARM_KEYS = Object.keys(CHARMS);
+function rollCharm(o) {
+  o.shopN = (o.shopN || 0) + 1;
+  if (!state || state.stage < 2 || o.charmUsed || o.shopN % 2) { o.charm = null; return; }
+  const opts = CHARM_KEYS.filter(k => k !== o.fightCharm), tot = opts.reduce((a, k) => a + CHARMS[k].w, 0);
+  let x = Math.random() * tot; o.charm = opts.find(k => (x -= CHARMS[k].w) < 0) || opts[0];
+}
+function mirrorTarget(o) {
+  const ids = [...new Set(allUnits(o).map(x => x.u.id))].filter(id => UNIT[id].cost <= 3 && state.pool[id] > 0);
+  return ids.length ? pick(ids) : null;
+}
+function seedTarget(o) { const l = allUnits(o).filter(x => x.u.star === 1 && UNIT[x.u.id].cost <= 2 && state.pool[x.u.id] >= 2); return l.length ? pick(l).u : null; }
+function charmBlock(o, id) {
+  const c = CHARMS[id];
+  if (o.gold < c.cost) return 'Not enough gold';
+  if ((id === 'tome' || id === 'map') && o.level >= 9) return 'Already max level';
+  if (id === 'mirror') { const t = mirrorTarget(o); if (!t) return 'No 1-3 cost unit to copy'; if (!canTake(o, t)) return 'Bench is full'; }
+  if ((id === 'recruit' || id === 'scout') && freeBench(o) < 0) return 'Bench is full';
+  if (id === 'starseed' && !seedTarget(o)) return 'No ★ 1- or 2-cost unit to grow';
+  if (id === 'badge' && !boardCount(o)) return 'No units on your board';
+  if (id === 'loan' && o.loan) return 'You already have a loan';
+  if (id === 'spring' && o.hp >= 100) return 'Already at full health';
+  if (c.kind === 'fight' && o.fightCharm) return 'You already have a charm for next fight';
+  return '';
+}
+function buyCharm(o) {
+  const id = o.charm; if (!id || o.charmUsed) return false;
+  if (charmBlock(o, id)) return false;
+  const c = CHARMS[id], say = m => { if (!o.isBot) toast(m); };
+  o.gold -= c.cost; o.charm = null; o.charmUsed = true;
+  if (id === 'piggy') o.piggy = (o.piggy || 0) + 5;
+  else if (id === 'spins') o.freeRolls = (o.freeRolls || 0) + 3;
+  else if (id === 'loan') { o.gold += 8; o.loan = 10; }
+  else if (id === 'compound') o.compound = true;
+  else if (id === 'jackpot') { if (Math.random() < .5) { o.gold += 8; say('🎲 Heads! +8 gold'); } else say('🎲 Tails… no luck'); }
+  else if (id === 'tome') addXp(o, 6);
+  else if (id === 'map') { addXp(o, 4); o.freeRolls = (o.freeRolls || 0) + 1; }
+  else if (id === 'mirror') { const t = mirrorTarget(o); giveUnit(o, t); say(`🪞 Copied ${UNIT[t].name}!`); }
+  else if (id === 'recruit' || id === 'scout') { const t = pickFromPool(id === 'scout' ? 4 : 2); if (t) { giveUnit(o, t); say(`${c.icon} ${UNIT[t].name} joined!`); } else { o.gold += c.cost; say('None left in the pool — refunded'); } }
+  else if (id === 'starseed') { const u = seedTarget(o); state.pool[u.id] -= 2; u.star = 2; say(`🌟 ${UNIT[u.id].name} grew to ★★!`); checkCombine(o, u.id); }
+  else if (id === 'parts') o.items.push(pick(COMP_KEYS));
+  else if (id === 'forge') { const it = randomCompleted(); o.items.push(it); say(`🔨 Forged ${itemName(it)}!`); }
+  else if (id === 'anvil') giveAnvil(o);
+  else if (id === 'badge') { const ts = Object.keys(traitCounts(Object.values(o.board))); const t = pick(ts); o.emblems[t] = (o.emblems[t] || 0) + 1; say(`🎖️ +1 ${TRAITS[t].icon} ${t}`); }
+  else if (id === 'spring') o.hp = Math.min(100, o.hp + 4);
+  else o.fightCharm = id;
+  return true;
+}
+function applyCharms(S, ownA, ownB) {
+  [ownA, ownB].forEach((o, side) => {
+    const id = o && o.fightCharm; if (!id) return;
+    const team = S.fighters.filter(f => f.side === side), foes = S.fighters.filter(f => f.side !== side);
+    if (id === 'ward') team.forEach(f => { f.shield = Math.min(f.maxHp * 1.5, f.shield + f.maxHp * .15); f.shieldT = Math.max(f.shieldT || 0, 8); });
+    if (id === 'hymn') team.forEach(f => { if (f.maxMana) f.mana = Math.min(f.maxMana - 1, f.mana + 25); });
+    if (id === 'drum') { team.forEach(f => f.asBonus += 25); (S.drum ||= [])[side] = true; }
+    if (id === 'bomb') (S.bombs ||= []).push({ side, t: 1.5 });
+    if (id === 'wind') (S.wind ||= [])[side] = true;
+    if (id === 'fang') team.forEach(f => f.lifesteal = (f.lifesteal || 0) + .15);
+    if (id === 'potion') team.forEach(f => { f.maxHp *= 1.2; f.hp *= 1.2; });
+    if (id === 'rally') (S.rally ||= [])[side] = true;
+    if (id === 'frost') foes.forEach(f => stun(S, f, 1.2));
+    if (id === 'doll') { const t = foes.filter(f => f.def).sort((a, b) => (b.def.cost * b.star - a.def.cost * a.star) || b.maxHp - a.maxHp)[0]; if (t) { t.maxHp *= .7; t.hp = Math.min(t.hp, t.maxHp); addText(S, t, '🪆 Hexed', '#c58cff'); } }
+  });
+}
+function charmTick(S) {
+  if (S.drum && S.time >= 6) { S.drum.forEach((on, side) => { if (on) S.fighters.filter(f => f.side === side).forEach(f => f.asBonus -= 25); }); S.drum = null; }
+  if (S.bombs) S.bombs = S.bombs.filter(b => {
+    if (S.time < b.t) return true;
+    const foes = S.fighters.filter(e => e.alive && e.side !== b.side); if (!foes.length) return false;
+    const crowd = e => foes.filter(x => hexDist(x.r, x.c, e.r, e.c) <= 1).length;
+    const t = foes.sort((a, c) => crowd(c) - crowd(a))[0], dmg = 220 + 90 * (state ? state.stage : 3);
+    addFx(S, { type: 'ring', r: t.r, c: t.c, color: '#ff8a2a', dur: .6, rad: 1.8 }); addText(S, t, '💣 Boom!', '#ff8a2a', 1.2);
+    const src = S.fighters.find(f => f.side === b.side && f.alive) || null;
+    foes.filter(e => hexDist(e.r, e.c, t.r, t.c) <= 1).forEach(e => dealDamage(S, src, e, dmg, 'magic'));
+    return false;
+  });
+}
 function augCombat(o) {
   const c = { hp: 0, ad: 0, as: 0, ap: 0, armor: 0, mr: 0, mana: 0, regen: 0, manaRegen: 0, ls: 0, wind: 0, exec: 0 };
   if (o) (o.augs || []).forEach(f => { const a = augBase(f); if (a && a.combat) for (const k in a.combat) c[k] += a.combat[k]; });
@@ -1014,7 +1135,7 @@ function anyFromPool() { const opts = UNITS.filter(u => state.pool[u.id] > 0); r
 function shopPick(o) { return pickFromPool(rollCost(o.level)) || anyFromPool(); }
 function reserve(id) { if (id) state.pool[id] = Math.max(0, state.pool[id] - 1); return id; }
 function releaseShop(o) { (o.shop || []).forEach(id => { if (id) state.pool[id]++; }); o.shop = [null, null, null, null, null]; }
-function rollShop(o) { releaseShop(o); o.shop = [0, 0, 0, 0, 0].map(() => reserve(shopPick(o))); }
+function rollShop(o) { releaseShop(o); o.shop = [0, 0, 0, 0, 0].map(() => reserve(shopPick(o))); rollCharm(o); }
 function recomputePool() {
   UNITS.forEach(u => state.pool[u.id] = POOL_SIZE[u.cost]);
   owners().forEach(o => {
@@ -1161,6 +1282,7 @@ function buildSim(teamA, teamB, headless, ownA, ownB) {
     if (f.tr.pact) [f, ...S.fighters.filter(a => a.side === f.side && a !== f && hexDist(a.r, a.c, f.r, f.c) <= 1)].forEach(a => { a.shield = Math.min(a.maxHp * 1.5, a.shield + f.tr.pact); a.shieldT = Math.max(a.shieldT, 6); a.pactBurst = (a.pactBurst || 0) + f.tr.pact / 2; });
     if (f.tr.freshBatch) treat(S, f);
   });
+  applyCharms(S, ownA, ownB);
   return S;
 }
 const live = f => f && f.alive;
@@ -1233,6 +1355,7 @@ function dealDamage(S, src, t, amt, kind, crit) {
   if (t.hp <= 0) {
     if (tf.revive && !t.revived) { t.revived = true; t.hp = t.maxHp * .4; t.burnT = 0; addText(S, t, 'Reborn!', '#ffb347', 1.3); addFx(S, { type: 'ring', r: t.r, c: t.c, color: '#ffb347', dur: .8, rad: 1.8 }); return amt; }
     if (tt.reboot && !t.rebooted) { t.rebooted = true; t.hp = t.maxHp * tt.reboot / 100; t.burnT = 0; t.bleedT = 0; addText(S, t, 'Reboot!', '#aab8cc', 1.3); addFx(S, { type: 'ring', r: t.r, c: t.c, color: '#aab8cc', dur: .8, rad: 1.5 }); return amt; }
+    if (S.wind && S.wind[t.side] && !t.isMini && t.def) { S.wind[t.side] = false; t.hp = t.maxHp * .4; t.burnT = 0; t.bleedT = 0; addText(S, t, '🪽 Second Wind!', '#bfe9ff', 1.3); addFx(S, { type: 'ring', r: t.r, c: t.c, color: '#bfe9ff', dur: .8, rad: 1.5 }); return amt; }
     t.alive = false; t.hp = 0; S.occ[t.r * COLS + t.c] = null;
     if (src && sf.purse && src.side !== t.side) src.kills = (src.kills || 0) + 1;
     onDeath(S, t, src);
@@ -1254,6 +1377,7 @@ function spawnMini(S, t, pct) {
 }
 function onDeath(S, t, src) {
   vfx(S, { t: 'death', f: t, color: t.color || '#ccc' });
+  if (S.rally && S.rally[t.side]) alliesOf(S, t).forEach(a => { a.ad *= 1.2; });
   if (t.tr && t.tr.nanobots) { alliesOf(S, t).forEach(a => heal(S, a, a.maxHp * t.tr.nanobots / 100)); addFx(S, { type: 'ring', r: t.r, c: t.c, color: '#36c6ff', dur: .7, rad: 3 }); }
   if (t.tr && t.tr.split && !t.isMini) spawnMini(S, t, t.tr.split);
   if (src && src.tr && src.side !== t.side) {
@@ -1446,6 +1570,7 @@ function simStep(S, dt) {
   if (S.over) return;
   const prevSec = Math.floor(S.time);
   S.time += dt;
+  if (S.drum || S.bombs) charmTick(S);
   if (Math.floor(S.time) > prevSec) { sideTick(S, 0); sideTick(S, 1); }
   const taunters = S.time < 4 ? S.fighters.filter(x => x.alive && x.tr && x.tr.taunt) : [];
   if (S.runes) S.runes = S.runes.filter(u => { u.t -= dt; if (live(u.tgt)) { u.r = u.tgt.r; u.c = u.tgt.c; } if (u.t > 0) return true; addFx(S, { type: 'ring', r: u.r, c: u.c, color: '#b58cff', dur: .5, rad: 1.6 }); S.fighters.filter(e => e.alive && e.side !== u.src.side && hexDist(e.r, e.c, u.r, u.c) <= 1).forEach(e => dealDamage(S, u.src, e, u.dmg, 'magic')); return false; });
@@ -1562,6 +1687,7 @@ function botTurn(o) {
     }
     if (g < rolls && o.gold - 2 >= reserve) { o.gold -= 2; rollShop(o); } else break;
   }
+  if (o.charm && Math.random() < .5 && o.gold - CHARMS[o.charm].cost >= Math.min(reserve, 10)) buyCharm(o);
   if (o.gold >= 54 && o.level < 9) while (o.gold >= 54 && buyXp(o));
   botArrange(o);
 }
@@ -1616,7 +1742,11 @@ function beginPlan(first) {
   if (!first) {
     for (const o of owners()) {
       if (!o.alive) continue;
+      o.charmUsed = false;
+      if (o.piggy) { o.gold += o.piggy; if (o === p) toast(`🐷 Piggy Bank paid out ${o.piggy} gold!`); o.piggy = 0; }
       const ip = incomeParts(o), inc = ip.total; o.gold += inc; addXp(o, 2);
+      if (o.compound) { o.gold += ip.interest; o.compound = false; if (o === p) toast(`🏦 Compound Coin: +${ip.interest} extra interest`); }
+      if (o.loan) { o.gold = Math.max(0, o.gold - o.loan); if (o === p) toast(`🤝 Loan repaid: -${o.loan} gold`); o.loan = 0; }
       if (o === p) p.lastParts = ip;
       if (o === p) { o.lastIncome = inc; }
       else { rollShop(o); botTurn(o); }
@@ -1722,10 +1852,14 @@ function endCombat() {
       const b = bi !== null ? state.bots[bi] : pick(state.bots.filter(x => x.alive && x !== a));
       const R = runHeadless(teamOf(a, false), teamOf(b, true), a, b);
       const ghost = bi === null;
+      if (R.winner === 0 && a.fightCharm === 'bounty') a.gold += 5;
+      if (R.winner === 1 && !ghost && b.fightCharm === 'bounty') b.gold += 5;
       if (R.winner === 0) { if (!ghost) { b.hp -= stageDamage() + survivorsScore(R, 0); b.streak = b.streak < 0 ? b.streak - 1 : -1; } a.streak = a.streak > 0 ? a.streak + 1 : 1; }
       else { a.hp -= stageDamage() + (R.winner === 1 ? survivorsScore(R, 1) : 0); a.streak = a.streak < 0 ? a.streak - 1 : -1; if (!ghost) { if (R.winner === 1) b.streak = b.streak > 0 ? b.streak + 1 : 1; else { b.hp -= stageDamage(); b.streak = b.streak < 0 ? b.streak - 1 : -1; } } }
     }
   }
+  if (won && p.fightCharm === 'bounty') { p.gold += 5; sub += ' · 📜 Bounty +5 gold'; }
+  owners().forEach(o => { o.fightCharm = null; });
   state.bots.forEach(b => { if (b.alive && b.hp <= 0) { b.alive = false; b.hp = 0; state.elim.push(b.name); returnToPool(b); } });
   state.phase = 'resolve';
   [...new Set(allUnits(p).map(x => x.u.id))].forEach(id => checkCombine(p, id));
@@ -1879,6 +2013,7 @@ function showAugPicker() {
   $('augReroll').classList.add('hidden');
   $('augScreen').classList.remove('hidden');
 }
+document.getElementById('charmBuy').onclick = () => { const p = state.player; if (state.phase !== 'plan' || transition || state.carousel) return; const id = p.charm; const why = id && charmBlock(p, id); if (why) { toast(why); return; } if (buyCharm(p)) { sfx('star'); toast(`${CHARMS[id].icon} ${CHARMS[id].name}${CHARMS[id].kind === 'fight' ? ' ready for the next fight!' : ' used!'}`); updateUI(); save(); } };
 document.getElementById('augPeek').onclick = () => { $('augScreen').classList.add('hidden'); if (state.augOffer) toast('Tap 🎴 Augment when you are ready to choose'); };
 
 /* ================= SAVE ================= */
@@ -1895,9 +2030,24 @@ function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.rem
 function showBanner(t, s, color) { const b = $('banner'); b.innerHTML = `<span style="color:${color}">${t}</span><small>${s}</small>`; b.classList.remove('hidden'); }
 function hideBanner() { $('banner').classList.add('hidden'); }
 
+function renderCharm() {
+  const p = state.player, bar = $('charmBar'), id = p.charm, fc = p.fightCharm, was = !bar.classList.contains('hidden');
+  if (!id && !fc) { bar.classList.add('hidden'); if (was) requestAnimationFrame(resize); return; }
+  bar.classList.remove('hidden'); if (!was) requestAnimationFrame(resize);
+  if (id) {
+    const c = CHARMS[id], why = charmBlock(p, id), ok = !why && state.phase === 'plan' && !transition && !state.carousel;
+    bar.classList.remove('ready'); $('charmIcon').textContent = c.icon; $('charmName').textContent = `Charm · ${c.name}`;
+    $('charmText').textContent = c.text + (why && why !== 'Not enough gold' ? ` (${why})` : '');
+    $('charmBuy').textContent = `Buy ${c.cost} 🪙`; $('charmBuy').disabled = !ok; $('charmBuy').classList.remove('hidden');
+  } else {
+    const c = CHARMS[fc]; bar.classList.add('ready'); $('charmIcon').textContent = c.icon; $('charmName').textContent = `${c.name} is ready`;
+    $('charmText').textContent = c.text; $('charmBuy').classList.add('hidden');
+  }
+}
 function updateUI() {
   if (!state) return;
   const p = state.player, plan = state.phase === 'plan' && !transition, shopOk = canShop();
+  renderCharm();
   const sk = $('streakLbl'), sv = p.streak || 0;
   if (Math.abs(sv) >= 1) { sk.classList.remove('hidden'); sk.className = sv > 0 ? 'win' : 'lose'; sk.textContent = (sv > 0 ? '🔥' : '❄️') + Math.abs(sv) + (streakGold(p) ? ` +${streakGold(p)}` : ''); }
   else sk.className = 'hidden';
