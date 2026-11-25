@@ -54,6 +54,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
 #charmBar .ci{font-size:24px}#charmBar .ct{flex:1;display:flex;flex-direction:column;line-height:1.2;min-width:0}#charmBar .ct b{font-size:13px}#charmBar .ct small{font-size:11px;color:#d8d3ee}
 #charmBar button{border:0;border-radius:8px;padding:8px 10px;font-weight:800;background:linear-gradient(#ffd86b,#f0a93a);color:#2a1b05;white-space:nowrap}#charmBar button:disabled{opacity:.45}
 @keyframes charmIn{from{transform:translateY(6px);opacity:0}to{transform:none;opacity:1}}
+#shop.closed{position:relative}#shop.closed::after{content:'🔒 Shop opens after the first fight';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#120f1ccc;border-radius:10px;font-weight:700;font-size:14px;color:#f1ecff}
 #shop{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
 .card{position:relative;height:104px;border-radius:9px;background:var(--panel2);border:2px solid var(--line);padding:4px;display:flex;flex-direction:column;justify-content:space-between;text-align:left;overflow:hidden}
 .card .nm{font-weight:800;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative;z-index:1}
@@ -201,7 +202,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
   <button class="big alt hidden" id="contBtn">Continue</button>
   <div class="how" style="margin-top:16px">
     <b>How to play</b><br>
-    • Tap shop cards to <b>buy</b> units. Drag them from the bench onto the bottom half of the board.<br>
+    • You start with one unit; the shop opens after the first fight. Tap shop cards to <b>buy</b> units. Drag them from the bench onto the bottom half of the board.<br>
     • From stage 2, <b>every other shop</b> shows a <b>charm</b> above the shop: a one-time buy (max one per round). There are 27 kinds: gold and XP deals, free units and items, healing, and charms that buff your team or curse the enemy in the next fight. Rerolling past one loses it.<br>
     • All 8 players share a <b>limited pool</b> of each unit (18/15/13/10/8 copies by cost). Units in shops are reserved until rerolled, so contested units run out.<br>
     • <b>3 copies</b> of a unit combine into a ★★ unit; 3 ★★ make a ★★★. Shop cards show <b>⚔</b> how many you have in play, <b>🪑</b> on your bench, dots for copies, and glow gold with <b>⬆★★</b> when buying ranks it up.<br>
@@ -1161,7 +1162,8 @@ function copies(o, id, star = 1) { return allUnits(o).filter(x => x.u.id === id 
 function midFight(o) { return o === state.player && state.phase === 'combat'; }
 function benchCopies(o, id) { return o.bench.filter(u => u && u.id === id && u.star === 1).length; }
 function canTake(o, id) { return freeBench(o) >= 0 || (midFight(o) ? benchCopies(o, id) : copies(o, id)) >= 2; }
-function canShop() { return state && !transition && !state.carousel && (state.phase === 'plan' || state.phase === 'combat'); }
+function firstRound() { return state && state.stage === 1 && state.round === 1; }
+function canShop() { return state && !transition && !state.carousel && !firstRound() && (state.phase === 'plan' || state.phase === 'combat'); }
 
 function checkCombine(o, id) {
   for (let star = 1; star <= 2; star++) {
@@ -1186,6 +1188,7 @@ function giveUnit(o, id, reserved) {
   return u;
 }
 function buyUnit(o, slot) {
+  if (firstRound() || (!o.isBot && !canShop())) return false;
   const id = o.shop[slot]; if (!id) return false;
   const c = UNIT[id].cost; if (o.gold < c || !canTake(o, id)) return false;
   o.gold -= c; o.shop[slot] = null; giveUnit(o, id, true); return true;
@@ -1733,7 +1736,7 @@ function newGame() {
   UNITS.forEach(u => state.pool[u.id] = POOL_SIZE[u.cost]);
   owners().forEach(o => { o.gold = 2; giveUnit(o, pickFromPool(1)); });
   const p = state.player; const u = p.bench[0]; p.bench[0] = null; p.board[key(4, 3)] = u;
-  state.bots.forEach(b => { rollShop(b); botTurn(b); });
+  state.bots.forEach(b => { rollShop(b); botArrange(b); });
   rollShop(p);
   beginPlan(true);
 }
@@ -2063,6 +2066,7 @@ function updateUI() {
   $('xpFill').style.width = p.level >= 9 ? '100%' : (p.xp / XP_NEED[p.level] * 100) + '%';
   $('xpLbl').textContent = p.level >= 9 ? 'Max level' : `${p.xp}/${XP_NEED[p.level]} XP`;
   $('xpBtn').disabled = !shopOk || p.gold < 4 || p.level >= 9;
+  $('shop').classList.toggle('closed', firstRound());
   $('rerollBtn').disabled = !shopOk || (p.gold < 2 && !p.freeRolls);
   $('rerollBtn').innerHTML = p.freeRolls ? `Reroll<br><small>Free ×${p.freeRolls}</small>` : 'Reroll<br><small>2 🪙</small>';
   $('lockBtn').textContent = p.locked ? '🔒' : '🔓'; $('lockBtn').classList.toggle('locked', p.locked);
