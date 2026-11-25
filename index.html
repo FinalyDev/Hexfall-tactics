@@ -1335,7 +1335,7 @@ function landAttack(S, f, t, dmg, crit, noProc) {
   if (r.chill) { t.chill = Math.max(t.chill || 0, 30); t.chillT = 2; if (f.hits % 3 === 0 && live(t)) { addFx(S, { type: 'ring', r: t.r, c: t.c, color: '#bff4ff', dur: .5, rad: .9 }); stun(S, t, r.chill); } }
   if (r.bleed) { t.bleedDps = (t.bleedT > 0 ? t.bleedDps : 0) + f.ad * r.bleed / 100; t.bleedT = 3; t.bleedSrc = f; }
   if (r.shred) { t.armor = Math.max(0, t.armor - 4); t.mr = Math.max(0, t.mr - 4); enemiesOf(S, f).filter(e => hexDist(e.r, e.c, t.r, t.c) <= 1).forEach(e => dealDamage(S, f, e, r.shred, 'magic')); }
-  if (r.mark && live(t)) { t.markT = 3; t.markPct = Math.max(t.markT > 0 && t.markPct || 0, r.mark); }
+  if (r.mark && live(t)) { t.markPct = Math.max(t.markT > 0 ? t.markPct : 0, r.mark); t.markT = 3; }
   if (r.cleave) enemiesOf(S, f).filter(e => e !== t && hexDist(e.r, e.c, t.r, t.c) <= 1).forEach(e => dealDamage(S, f, e, dmg * r.cleave / 100, 'phys'));
   if (r.maul && f.hits % 4 === 0 && live(t)) { const m = f.ad * r.maul / 100; addFx(S, { type: 'slash', r: t.r, c: t.c, color: '#c98a4b', dur: .4 }); addText(S, f, 'Maul!', '#c98a4b'); dealDamage(S, f, t, m, 'true'); heal(S, f, m); }
   if (f.sugarShots > 0) { f.sugarShots--; const o = enemiesOf(S, f).filter(e => e !== t).sort((a, b) => hexDist(a.r, a.c, t.r, t.c) - hexDist(b.r, b.c, t.r, t.c))[0]; if (o) S.proj.push({ src: f, tgt: o, dmg: f.ad * r.sugarRush / 100, kind: 'phys', t: 0, dur: .2, fr: t.r, fc: t.c, color: '#ff7fbf', atk: true, noProc: true }); }
@@ -1723,7 +1723,7 @@ function endCombat() {
       const R = runHeadless(teamOf(a, false), teamOf(b, true), a, b);
       const ghost = bi === null;
       if (R.winner === 0) { if (!ghost) { b.hp -= stageDamage() + survivorsScore(R, 0); b.streak = b.streak < 0 ? b.streak - 1 : -1; } a.streak = a.streak > 0 ? a.streak + 1 : 1; }
-      else { a.hp -= stageDamage() + (R.winner === 1 ? survivorsScore(R, 1) : 0); a.streak = a.streak < 0 ? a.streak - 1 : -1; if (!ghost) b.streak = b.streak > 0 ? b.streak + 1 : 1; }
+      else { a.hp -= stageDamage() + (R.winner === 1 ? survivorsScore(R, 1) : 0); a.streak = a.streak < 0 ? a.streak - 1 : -1; if (!ghost) { if (R.winner === 1) b.streak = b.streak > 0 ? b.streak + 1 : 1; else { b.hp -= stageDamage(); b.streak = b.streak < 0 ? b.streak - 1 : -1; } } }
     }
   }
   state.bots.forEach(b => { if (b.alive && b.hp <= 0) { b.alive = false; b.hp = 0; state.elim.push(b.name); returnToPool(b); } });
