@@ -203,7 +203,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
   <div class="how" style="margin-top:16px">
     <b>How to play</b><br>
     • You start with one unit; the shop opens after the first fight. Tap shop cards to <b>buy</b> units. Drag them from the bench onto the bottom half of the board.<br>
-    • From stage 2, <b>every other shop</b> shows a <b>charm</b> above the shop: a one-time buy (max one per round). There are 27 kinds: gold and XP deals, free units and items, healing, and charms that buff your team or curse the enemy in the next fight. Rerolling past one loses it.<br>
+    • From stage 2, <b>every other shop</b> shows a <b>charm</b> above the shop: a one-time buy (max one per round). There are 38 kinds: gold and XP deals, free units and items, healing, and charms that buff your team or curse the enemy in the next fight. Some only show up early (stages 2-3, like Starter Pack and Lucky Loan) and some only late (stage 5+, like Royal Summons and Ascension). Rerolling past one loses it.<br>
     • All 8 players share a <b>limited pool</b> of each unit (18/15/13/10/8 copies by cost). Units in shops are reserved until rerolled, so contested units run out.<br>
     • <b>3 copies</b> of a unit combine into a ★★ unit; 3 ★★ make a ★★★. Shop cards show <b>⚔</b> how many you have in play, <b>🪑</b> on your bench, dots for copies, and glow gold with <b>⬆★★</b> when buying ranks it up.<br>
     • Every unit has an <b>origin</b> and a <b>class</b>. Field 2, 4 or 6 different units of a trait to unlock its <b>special power</b> — burns, chain lightning, revives, stuns, taunts and more. Tap a trait to read it. Each set has its own traits.<br>
@@ -961,26 +961,26 @@ function ecoOf(o, k) { let n = 0; (o.augs || []).forEach(f => { const a = augBas
 /* ================= CHARMS ================= */
 const CHARMS = {
   // economy
-  piggy:   { name: 'Piggy Bank',      icon: '🐷', cost: 2, kind: 'now',   w: 3, text: 'Pays out 5 gold at the start of next round.' },
+  piggy:   { name: 'Piggy Bank',      icon: '🐷', cost: 2, kind: 'now',   w: 3, st: [2, 4], text: 'Pays out 5 gold at the start of next round.' },
   spins:   { name: 'Free Spins',      icon: '🎰', cost: 1, kind: 'now',   w: 3, text: 'Gain 3 free rerolls this round.' },
-  loan:    { name: 'Lucky Loan',      icon: '🤝', cost: 0, kind: 'now',   w: 2, text: 'Get 8 gold now. Next round, 10 gold is collected back.' },
-  compound:{ name: 'Compound Coin',   icon: '🏦', cost: 2, kind: 'now',   w: 2, text: 'Next round, your interest is paid twice.' },
+  loan:    { name: 'Lucky Loan',      icon: '🤝', cost: 0, kind: 'now',   w: 2, st: [2, 3], text: 'Get 8 gold now. Next round, 10 gold is collected back.' },
+  compound:{ name: 'Compound Coin',   icon: '🏦', cost: 2, kind: 'now',   w: 2, st: [2, 4], text: 'Next round, your interest is paid twice.' },
   jackpot: { name: 'Jackpot',         icon: '🎲', cost: 3, kind: 'now',   w: 2, text: 'Flip a coin: heads wins 8 gold, tails wins nothing.' },
   // xp
-  tome:    { name: 'Study Tome',      icon: '📘', cost: 3, kind: 'now',   w: 3, text: 'Gain 6 XP.' },
-  map:     { name: 'Old Map',         icon: '🗺️', cost: 2, kind: 'now',   w: 2, text: 'Gain 4 XP and a free reroll.' },
+  tome:    { name: 'Study Tome',      icon: '📘', cost: 3, kind: 'now',   w: 3, st: [2, 5], text: 'Gain 6 XP.' },
+  map:     { name: 'Old Map',         icon: '🗺️', cost: 2, kind: 'now',   w: 2, st: [2, 5], text: 'Gain 4 XP and a free reroll.' },
   // units
   mirror:  { name: 'Mirror Shard',    icon: '🪞', cost: 5, kind: 'now',   w: 2, text: 'Copy a random 1-3 cost unit you own (from the shared pool).' },
-  recruit: { name: 'Recruit Flyer',   icon: '📣', cost: 2, kind: 'now',   w: 3, text: 'Gain a random 2-cost unit.' },
-  scout:   { name: 'Talent Scout',    icon: '🔭', cost: 4, kind: 'now',   w: 2, text: 'Gain a random 4-cost unit.' },
-  starseed:{ name: 'Star Seed',       icon: '🌟', cost: 6, kind: 'now',   w: 1, text: 'A random ★ 1- or 2-cost unit you own grows to ★★.' },
+  recruit: { name: 'Recruit Flyer',   icon: '📣', cost: 2, kind: 'now',   w: 3, st: [2, 4], text: 'Gain a random 2-cost unit.' },
+  scout:   { name: 'Talent Scout',    icon: '🔭', cost: 4, kind: 'now',   w: 2, st: [3, 9], text: 'Gain a random 4-cost unit.' },
+  starseed:{ name: 'Star Seed',       icon: '🌟', cost: 6, kind: 'now',   w: 1, st: [2, 4], text: 'A random ★ 1- or 2-cost unit you own grows to ★★.' },
   // items
   parts:   { name: 'Spare Parts',     icon: '🧰', cost: 4, kind: 'now',   w: 3, text: 'Gain a random item component.' },
-  forge:   { name: 'Pocket Forge',    icon: '🔨', cost: 7, kind: 'now',   w: 1, text: 'Gain a random completed item.' },
-  anvil:   { name: 'Lucky Anvil',     icon: '⚒️', cost: 8, kind: 'now',   w: 1, text: 'Gain an Artifact Anvil.' },
-  badge:   { name: 'Trait Badge',     icon: '🎖️', cost: 6, kind: 'now',   w: 1, text: 'Permanently count +1 toward a random trait on your board.' },
+  forge:   { name: 'Pocket Forge',    icon: '🔨', cost: 7, kind: 'now',   w: 1, st: [3, 9], text: 'Gain a random completed item.' },
+  anvil:   { name: 'Lucky Anvil',     icon: '⚒️', cost: 8, kind: 'now',   w: 1, st: [3, 9], text: 'Gain an Artifact Anvil.' },
+  badge:   { name: 'Trait Badge',     icon: '🎖️', cost: 6, kind: 'now',   w: 1, st: [3, 9], text: 'Permanently count +1 toward a random trait on your board.' },
   // player
-  spring:  { name: 'Healing Spring',  icon: '⛲', cost: 3, kind: 'now',   w: 2, text: 'Restore 4 player health.' },
+  spring:  { name: 'Healing Spring',  icon: '⛲', cost: 3, kind: 'now',   w: 2, st: [2, 4], text: 'Restore 4 player health.' },
   // next fight: buffs
   drum:    { name: 'War Drum',        icon: '🥁', cost: 3, kind: 'fight', w: 2, text: 'Next fight: your team gets +25% attack speed for the first 6 seconds.' },
   ward:    { name: 'Iron Ward',       icon: '🛡️', cost: 2, kind: 'fight', w: 2, text: 'Next fight: every ally starts with a shield worth 15% of its health.' },
@@ -990,6 +990,19 @@ const CHARMS = {
   potion:  { name: 'Growth Potion',   icon: '🧪', cost: 4, kind: 'fight', w: 2, text: 'Next fight: your units have +20% max health.' },
   rally:   { name: 'Rally Banner',    icon: '🚩', cost: 2, kind: 'fight', w: 2, text: 'Next fight: whenever an ally falls, the rest gain +20% attack damage (stacks).' },
   bounty:  { name: 'Bounty Poster',   icon: '📜', cost: 1, kind: 'fight', w: 2, text: 'Win your next fight to collect 5 gold.' },
+  // early game only (stages 2-3)
+  starter: { name: 'Starter Pack',    icon: '🎒', cost: 1, kind: 'now',   w: 3, st: [2, 3], text: 'Gain two random 1-cost units.' },
+  twin:    { name: 'Twin Seeds',      icon: '🌱', cost: 3, kind: 'now',   w: 2, st: [2, 3], text: 'Gain two more copies of a random 1-cost unit you own.' },
+  headstart:{ name: 'Head Start',     icon: '🚀', cost: 4, kind: 'now',   w: 2, st: [2, 3], text: 'Instantly reach your next level (up to level 6).' },
+  nest:    { name: 'Nest Egg',        icon: '🥚', cost: 3, kind: 'now',   w: 2, st: [2, 3], text: 'Gain +1 gold at the start of each of the next 5 rounds.' },
+  scrap:   { name: 'Scrap Cart',      icon: '🛒', cost: 2, kind: 'now',   w: 2, st: [2, 3], text: 'Gain a random item component and 1 gold back.' },
+  // late game only (stage 5+)
+  royal:   { name: 'Royal Summons',   icon: '👑', cost: 8, kind: 'now',   w: 2, st: [5, 99], text: 'Gain a random 5-cost unit.' },
+  ascend:  { name: 'Ascension',       icon: '✨', cost: 12, kind: 'now',  w: 1, st: [5, 99], text: 'A random ★★ 1-3 cost unit you own becomes ★★★.' },
+  masterwork:{ name: 'Masterwork',    icon: '💎', cost: 9, kind: 'now',   w: 1, st: [5, 99], text: 'Gain a random artifact.' },
+  elixir:  { name: 'Elixir of Life',  icon: '🍷', cost: 6, kind: 'now',   w: 2, st: [5, 99], text: 'Restore 10 player health.' },
+  meteor:  { name: 'Meteor Call',     icon: '☄️', cost: 4, kind: 'fight', w: 2, st: [5, 99], text: 'Next fight: after 3s a meteor hits the enemy with the most health for 40% of its max health and stuns everyone next to it for 1s.' },
+  warcry:  { name: 'War Cry',         icon: '📯', cost: 5, kind: 'fight', w: 2, st: [5, 99], text: 'Next fight: your team deals +15% damage with attacks and abilities.' },
   // next fight: hurt the enemy
   bomb:    { name: 'Fire Bomb',       icon: '💣', cost: 2, kind: 'fight', w: 2, text: 'Next fight: after 1.5s a bomb lands on the most crowded enemy spot, hitting it and everyone next to it.' },
   frost:   { name: 'Frost Charm',     icon: '❄️', cost: 2, kind: 'fight', w: 2, text: 'Next fight: every enemy starts frozen for 1.2 seconds.' },
@@ -999,13 +1012,17 @@ const CHARM_KEYS = Object.keys(CHARMS);
 function rollCharm(o) {
   o.shopN = (o.shopN || 0) + 1;
   if (!state || state.stage < 2 || o.charmUsed || o.shopN % 2) { o.charm = null; return; }
-  const opts = CHARM_KEYS.filter(k => k !== o.fightCharm), tot = opts.reduce((a, k) => a + CHARMS[k].w, 0);
+  const opts = CHARM_KEYS.filter(k => k !== o.fightCharm && (!CHARMS[k].st || (state.stage >= CHARMS[k].st[0] && state.stage <= CHARMS[k].st[1]))), tot = opts.reduce((a, k) => a + CHARMS[k].w, 0);
   let x = Math.random() * tot; o.charm = opts.find(k => (x -= CHARMS[k].w) < 0) || opts[0];
 }
 function mirrorTarget(o) {
   const ids = [...new Set(allUnits(o).map(x => x.u.id))].filter(id => UNIT[id].cost <= 3 && state.pool[id] > 0);
   return ids.length ? pick(ids) : null;
 }
+function freeSlots(o) { return o.bench.filter(x => !x).length; }
+function twinTarget(o) { const ids = [...new Set(allUnits(o).map(x => x.u.id))].filter(id => UNIT[id].cost === 1 && state.pool[id] >= 2); return ids.length ? pick(ids) : null; }
+function ascendTarget(o) { const l = allUnits(o).filter(x => x.u.star === 2 && UNIT[x.u.id].cost <= 3 && state.pool[x.u.id] >= 6); return l.length ? pick(l).u : null; }
+function charmStage(id) { const st = CHARMS[id].st; return !st ? '' : st[1] <= 3 ? 'Early game' : st[0] >= 5 ? 'Late game' : ''; }
 function seedTarget(o) { const l = allUnits(o).filter(x => x.u.star === 1 && UNIT[x.u.id].cost <= 2 && state.pool[x.u.id] >= 2); return l.length ? pick(l).u : null; }
 function charmBlock(o, id) {
   const c = CHARMS[id];
@@ -1016,6 +1033,12 @@ function charmBlock(o, id) {
   if (id === 'starseed' && !seedTarget(o)) return 'No ★ 1- or 2-cost unit to grow';
   if (id === 'badge' && !boardCount(o)) return 'No units on your board';
   if (id === 'loan' && o.loan) return 'You already have a loan';
+  if (id === 'starter' && freeSlots(o) < 2) return 'Needs 2 free bench spots';
+  if (id === 'twin') { if (!twinTarget(o)) return 'No 1-cost unit to copy'; if (freeSlots(o) < 2) return 'Needs 2 free bench spots'; }
+  if (id === 'headstart' && o.level >= 6) return 'Only works up to level 6';
+  if (id === 'royal' && freeBench(o) < 0) return 'Bench is full';
+  if (id === 'ascend' && !ascendTarget(o)) return 'No ★★ 1-3 cost unit to ascend';
+  if (id === 'elixir' && o.hp >= 100) return 'Already at full health';
   if (id === 'spring' && o.hp >= 100) return 'Already at full health';
   if (c.kind === 'fight' && o.fightCharm) return 'You already have a charm for next fight';
   return '';
@@ -1040,6 +1063,15 @@ function buyCharm(o) {
   else if (id === 'anvil') giveAnvil(o);
   else if (id === 'badge') { const ts = Object.keys(traitCounts(Object.values(o.board))); const t = pick(ts); o.emblems[t] = (o.emblems[t] || 0) + 1; say(`🎖️ +1 ${TRAITS[t].icon} ${t}`); }
   else if (id === 'spring') o.hp = Math.min(100, o.hp + 4);
+  else if (id === 'starter') { for (let k = 0; k < 2; k++) { const t = pickFromPool(1); if (t) giveUnit(o, t); } say('🎒 Two new recruits!'); }
+  else if (id === 'twin') { const t = twinTarget(o); giveUnit(o, t); giveUnit(o, t); say(`🌱 Two more ${UNIT[t].name}!`); }
+  else if (id === 'headstart') { addXp(o, XP_NEED[o.level] - o.xp); say(`🚀 Level ${o.level}!`); }
+  else if (id === 'nest') o.nest = (o.nest || 0) + 5;
+  else if (id === 'scrap') { o.items.push(pick(COMP_KEYS)); o.gold += 1; }
+  else if (id === 'royal') { const t = pickFromPool(5); if (t) { giveUnit(o, t); say(`👑 ${UNIT[t].name} answers the call!`); } else { o.gold += c.cost; say('None left in the pool — refunded'); } }
+  else if (id === 'ascend') { const u = ascendTarget(o); state.pool[u.id] -= 6; u.star = 3; say(`✨ ${UNIT[u.id].name} ascended to ★★★!`); }
+  else if (id === 'masterwork') { const it = 'art:' + pick(ART_KEYS); o.items.push(it); say(`💎 ${itemName(it)}!`); }
+  else if (id === 'elixir') o.hp = Math.min(100, o.hp + 10);
   else o.fightCharm = id;
   return true;
 }
@@ -1055,11 +1087,22 @@ function applyCharms(S, ownA, ownB) {
     if (id === 'fang') team.forEach(f => f.lifesteal = (f.lifesteal || 0) + .15);
     if (id === 'potion') team.forEach(f => { f.maxHp *= 1.2; f.hp *= 1.2; });
     if (id === 'rally') (S.rally ||= [])[side] = true;
+    if (id === 'meteor') (S.meteors ||= []).push({ side, t: 3 });
+    if (id === 'warcry') team.forEach(f => { f.ad *= 1.15; f.ap += 15; });
     if (id === 'frost') foes.forEach(f => stun(S, f, 1.2));
     if (id === 'doll') { const t = foes.filter(f => f.def).sort((a, b) => (b.def.cost * b.star - a.def.cost * a.star) || b.maxHp - a.maxHp)[0]; if (t) { t.maxHp *= .7; t.hp = Math.min(t.hp, t.maxHp); addText(S, t, '🪆 Hexed', '#c58cff'); } }
   });
 }
 function charmTick(S) {
+  if (S.meteors) S.meteors = S.meteors.filter(m => {
+    if (S.time < m.t) return true;
+    const foes = S.fighters.filter(e => e.alive && e.side !== m.side); if (!foes.length) return false;
+    const t = foes.sort((a, b) => b.hp - a.hp)[0], src = S.fighters.find(f => f.side === m.side && f.alive) || null;
+    addFx(S, { type: 'ring', r: t.r, c: t.c, color: '#ff5a2a', dur: .8, rad: 2 }); addText(S, t, '☄️ Meteor!', '#ff7a45', 1.3);
+    dealDamage(S, src, t, t.maxHp * .4, 'true');
+    foes.filter(e => e.alive && hexDist(e.r, e.c, t.r, t.c) <= 1).forEach(e => stun(S, e, 1));
+    return false;
+  });
   if (S.drum && S.time >= 6) { S.drum.forEach((on, side) => { if (on) S.fighters.filter(f => f.side === side).forEach(f => f.asBonus -= 25); }); S.drum = null; }
   if (S.bombs) S.bombs = S.bombs.filter(b => {
     if (S.time < b.t) return true;
@@ -1573,7 +1616,7 @@ function simStep(S, dt) {
   if (S.over) return;
   const prevSec = Math.floor(S.time);
   S.time += dt;
-  if (S.drum || S.bombs) charmTick(S);
+  if (S.drum || S.bombs || S.meteors) charmTick(S);
   if (Math.floor(S.time) > prevSec) { sideTick(S, 0); sideTick(S, 1); }
   const taunters = S.time < 4 ? S.fighters.filter(x => x.alive && x.tr && x.tr.taunt) : [];
   if (S.runes) S.runes = S.runes.filter(u => { u.t -= dt; if (live(u.tgt)) { u.r = u.tgt.r; u.c = u.tgt.c; } if (u.t > 0) return true; addFx(S, { type: 'ring', r: u.r, c: u.c, color: '#b58cff', dur: .5, rad: 1.6 }); S.fighters.filter(e => e.alive && e.side !== u.src.side && hexDist(e.r, e.c, u.r, u.c) <= 1).forEach(e => dealDamage(S, u.src, e, u.dmg, 'magic')); return false; });
@@ -1746,6 +1789,7 @@ function beginPlan(first) {
     for (const o of owners()) {
       if (!o.alive) continue;
       o.charmUsed = false;
+      if (o.nest > 0) { o.gold += 1; o.nest--; }
       if (o.piggy) { o.gold += o.piggy; if (o === p) toast(`🐷 Piggy Bank paid out ${o.piggy} gold!`); o.piggy = 0; }
       const ip = incomeParts(o), inc = ip.total; o.gold += inc; addXp(o, 2);
       if (o.compound) { o.gold += ip.interest; o.compound = false; if (o === p) toast(`🏦 Compound Coin: +${ip.interest} extra interest`); }
@@ -2039,7 +2083,7 @@ function renderCharm() {
   bar.classList.remove('hidden'); if (!was) requestAnimationFrame(resize);
   if (id) {
     const c = CHARMS[id], why = charmBlock(p, id), ok = !why && state.phase === 'plan' && !transition && !state.carousel;
-    bar.classList.remove('ready'); $('charmIcon').textContent = c.icon; $('charmName').textContent = `Charm · ${c.name}`;
+    bar.classList.remove('ready'); $('charmIcon').textContent = c.icon; $('charmName').textContent = `${charmStage(id) ? charmStage(id) + ' charm' : 'Charm'} · ${c.name}`;
     $('charmText').textContent = c.text + (why && why !== 'Not enough gold' ? ` (${why})` : '');
     $('charmBuy').textContent = `Buy ${c.cost} 🪙`; $('charmBuy').disabled = !ok; $('charmBuy').classList.remove('hidden');
   } else {
