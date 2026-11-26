@@ -202,7 +202,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
   <button class="big alt hidden" id="contBtn">Continue</button>
   <div class="how" style="margin-top:16px">
     <b>How to play</b><br>
-    • You start with one unit; the shop opens after the first fight. You start with 2 gold and earn no round income during the stage 1 monster rounds; the only gold until stage 2 is what monsters drop (along with units and item parts). Tap shop cards to <b>buy</b> units. Drag them from the bench onto the bottom half of the board.<br>
+    • You start with one unit; the shop opens after the first fight. You start with 2 gold, and each stage 1 monster round pays exactly 2 gold (plus units and item parts). Normal income starts at stage 2. Tap shop cards to <b>buy</b> units. Drag them from the bench onto the bottom half of the board.<br>
     • From stage 2, <b>every other shop</b> shows a <b>charm</b> above the shop: a one-time buy (max one per round). There are 38 kinds: gold and XP deals, free units and items, healing, and charms that buff your team or curse the enemy in the next fight. Some only show up early (stages 2-3, like Starter Pack and Lucky Loan) and some only late (stage 5+, like Royal Summons and Ascension). Rerolling past one loses it.<br>
     • All 8 players share a <b>limited pool</b> of each unit (18/15/13/10/8 copies by cost). Units in shops are reserved until rerolled, so contested units run out.<br>
     • <b>3 copies</b> of a unit combine into a ★★ unit; 3 ★★ make a ★★★. Shop cards show <b>⚔</b> how many you have in play, <b>🪑</b> on your bench, dots for copies, and glow gold with <b>⬆★★</b> when buying ranks it up.<br>
@@ -1859,11 +1859,11 @@ function grantLoot(o, won) {
     const id = pickFromPool(cost); if (!id) return;
     if (canTake(o, id)) { giveUnit(o, id); out.push(`🧑 ${UNIT[id].name}`); } else gold(UNIT[id].cost);
   };
-  if (!won) { part(); return out; }
+  if (!won) { part(); if (st === 1) gold(2); return out; }
   if (st === 1) {  // monsters drop units, parts and gold
-    if (rd === 1) { unit(1); part(); gold(1 + Math.floor(Math.random() * 2)); }
-    else if (rd === 2) { unit(1); unit(1); if (Math.random() < .5) part(); gold(1 + Math.floor(Math.random() * 3)); }
-    else { unit(2); part(); gold(2 + Math.floor(Math.random() * 3)); }
+    if (rd === 1) { unit(1); part(); gold(2); }
+    else if (rd === 2) { unit(1); unit(1); if (Math.random() < .5) part(); gold(2); }
+    else { unit(2); part(); gold(2); }
   } else { part(); part(); gold(3); if (Math.random() < .5) unit(Math.min(st, 4)); if (st >= 3) { giveAnvil(o); out.push('⚒️ Artifact Anvil'); } }
   return out;
 }
