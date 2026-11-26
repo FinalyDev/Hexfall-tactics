@@ -202,7 +202,7 @@ button{font:inherit;color:inherit;border:0;cursor:pointer}
   <button class="big alt hidden" id="contBtn">Continue</button>
   <div class="how" style="margin-top:16px">
     <b>How to play</b><br>
-    • You start with one unit; the shop opens after the first fight. During the stage 1 monster rounds you only earn 2 gold a round, but monsters drop units, item parts and gold. Tap shop cards to <b>buy</b> units. Drag them from the bench onto the bottom half of the board.<br>
+    • You start with one unit; the shop opens after the first fight. You start with 2 gold and earn no round income during the stage 1 monster rounds; the only gold until stage 2 is what monsters drop (along with units and item parts). Tap shop cards to <b>buy</b> units. Drag them from the bench onto the bottom half of the board.<br>
     • From stage 2, <b>every other shop</b> shows a <b>charm</b> above the shop: a one-time buy (max one per round). There are 38 kinds: gold and XP deals, free units and items, healing, and charms that buff your team or curse the enemy in the next fight. Some only show up early (stages 2-3, like Starter Pack and Lucky Loan) and some only late (stage 5+, like Royal Summons and Ascension). Rerolling past one loses it.<br>
     • All 8 players share a <b>limited pool</b> of each unit (18/15/13/10/8 copies by cost). Units in shops are reserved until rerolled, so contested units run out.<br>
     • <b>3 copies</b> of a unit combine into a ★★ unit; 3 ★★ make a ★★★. Shop cards show <b>⚔</b> how many you have in play, <b>🪑</b> on your bench, dots for copies, and glow gold with <b>⬆★★</b> when buying ranks it up.<br>
@@ -1255,8 +1255,8 @@ function addXp(o, n) { o.xp += n; while (o.level < 9 && o.xp >= XP_NEED[o.level]
 function buyXp(o) { if (o.gold < 4 || o.level >= 9) return false; o.gold -= 4; addXp(o, 4 + ecoOf(o, 'xpBuy')); return true; }
 function streakGold(o) { const s = Math.abs(o.streak || 0); return s >= 5 ? 3 : s >= 4 ? 2 : s >= 2 ? 1 : 0; }
 function incomeParts(o) {
-  const early = state.stage === 1;  // monster phase: flat 2 gold, no interest or streak
-  const base = early ? 2 : 5;
+  const early = state.stage === 1;  // monster phase: no round income — only the 2 starting gold plus monster drops
+  const base = early ? 0 : 5;
   const interest = early ? 0 : Math.min(5 + ecoOf(o, 'interest'), Math.floor(o.gold / 10));
   const streak = early ? 0 : streakGold(o);
   let bonus = ecoOf(o, 'income'); if (o.isBot) bonus += state.diff === 'easy' ? -1 : state.diff === 'hard' ? 2 : 0;
