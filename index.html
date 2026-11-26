@@ -1946,8 +1946,8 @@ function botArrange(o) {
 function returnToPool(o) { allUnits(o).forEach(x => state.pool[x.u.id] += Math.pow(3, x.u.star - 1)); o.board = {}; o.bench = Array(9).fill(null); releaseShop(o); }
 
 /* ================= ROUND FLOW ================= */
-const roundType = () => (state.stage === 1 || state.round === 6) ? 'pve' : 'pvp';
-const roundsIn = s => s === 1 ? 3 : 6;
+const roundType = () => (state.stage === 1 || state.round === 7) ? 'pve' : 'pvp';
+const roundsIn = s => s === 1 ? 3 : 7;  // stage 1: 3 monster rounds; later stages: 7 rounds, round 7 is monsters
 function stageDamage() { return [0, 0, 2, 4, 6, 9, 12][state.stage] ?? 15; }
 
 function newGame() {
