@@ -301,7 +301,7 @@ const TRAIT_SP = {
   refresh:     { text: v => `every 5 seconds, shake off burns, bleeds, chills and stuns, and heal ${v}% health.` },
   shred:       { text: v => `attacks splash acid, dealing ${v} magic damage to the target and enemies next to it and shredding 4 armor and magic resist (stacks).` },
   fizzCast:    { text: v => `when one casts an ability, it fizzes over, giving the 2 nearest allies ${v} mana.` },
-  split:       { text: v => `when one dies, it splits into a jelly copy with ${v}% of its max health.` },
+  split:       { text: v => `when one dies, it splits into a jelly copy with 60% of its max health that hits for ${v}% of its attack damage.` },
   popRocks:    { text: v => `enemies they finish off explode, dealing ${v} magic damage to enemies next to them.` },
   candyStun:   { text: v => `every 3rd attack throws a hard candy that stuns the target for ${v}s.` },
   freshBatch:  { text: v => `at the start of combat and every 6 seconds, give the lowest-health ally a treat that heals ${v} and grants 10 mana, and lob a cake at the nearest enemy for half that.` },
@@ -440,7 +440,7 @@ const SETS = [
       { name: 'Fizz',  icon: '🫧', color: '#7fc7ff', sp: 'fizzCast', vals: [20, 26, 29] },
     ],
     classes: [
-      { name: 'Jelly',  icon: '🍮', role: 'tank', sp: 'split', vals: [95, 300, 400] },
+      { name: 'Jelly',  icon: '🍮', role: 'tank', sp: 'split', vals: [100, 480, 650] },
       { name: 'Popper', icon: '🍭', role: 'assassin', sp: 'popRocks', vals: [910, 1235, 1420] },
       { name: 'Slinger',icon: '🎯', role: 'marksman', sp: 'candyStun', vals: [0.7, 1.8, 2.5] },
       { name: 'Baker',  icon: '🧁', role: 'healer', sp: 'freshBatch', vals: [145, 310, 520] },
@@ -484,6 +484,7 @@ function applySet(id) {
   const th = SET.theme, rs = document.documentElement.style;
   rs.setProperty('--bg', th.bg); rs.setProperty('--panel', th.panel); rs.setProperty('--panel2', th.panel2); rs.setProperty('--line', th.line);
   document.querySelector('meta[name=theme-color]').setAttribute('content', th.bg);
+  assignAbilities();
 }
 
 const COST_COLORS = ['', '#9aa4b1', '#3fbf6f', '#3a8ff0', '#b05cff', '#ffb72b'];
@@ -1419,7 +1420,7 @@ function smite(S, f, amt) { const e = nearestEnemy(S, f); if (!e || amt <= 0) re
 function spawnMini(S, t, pct) {
   const spot = [[t.r, t.c], ...neighbors(t.r, t.c)].find(([r, c]) => !S.occ[r * COLS + c]); if (!spot) return;
   const m = makeFighter({ u: t.u, r: spot[0], c: spot[1] }, t.side, null, null);
-  m.maxHp = m.hp = t.maxHp * pct / 100; m.isMini = true; m.maxMana = 0; m.mana = 0; m.tr = {}; m.fx = {}; m.items = []; m.ad *= .6;
+  m.maxHp = m.hp = t.maxHp * .6; m.isMini = true; m.maxMana = 0; m.mana = 0; m.tr = {}; m.fx = {}; m.items = []; m.ad *= pct / 100;
   S.fighters.push(m); S.occ[spot[0] * COLS + spot[1]] = m; addText(S, m, 'Split!', '#ff8fc7');
 }
 function onDeath(S, t, src) {
@@ -1525,6 +1526,179 @@ function landAttack(S, f, t, dmg, crit, noProc) {
   if (ff.chain && f.hits % 3 === 0 && live(t)) zap(S, f, t, ff.chain, 3, '#7fd0ff');
   if (ff.storm && f.hits % 4 === 0 && live(t)) zap(S, f, t, ff.storm, 3, '#ffe36a');
 }
+/* ================= UNIT ABILITIES (each unit has its own) ================= */
+const ORIGIN_WORDS = {
+  Ember: ['Cinder', 'Molten', 'Blazing', 'Ashen', 'Scorching', 'Kindled', 'Searing', 'Smoldering', 'Flarebound'],
+  Tide: ['Tidal', 'Brinewater', 'Undertow', 'Rippling', 'Deepwater', 'Foaming', 'Coral', 'Surging', 'Riptide'],
+  Grove: ['Thornwood', 'Mossy', 'Rootbound', 'Bramble', 'Verdant', 'Barkskin', 'Bloomwild', 'Ivy', 'Fernlit'],
+  Storm: ['Thunder', 'Galeforce', 'Static', 'Squall', 'Stormcall', 'Lightning', 'Cyclone', 'Tempest', 'Skybolt'],
+  Shade: ['Umbral', 'Duskborn', 'Hollow', 'Nightveil', 'Gloom', 'Shadowed', 'Eclipsed', 'Murky', 'Wraith'],
+  Chrome: ['Steel', 'Polished', 'Alloy', 'Ironclad', 'Plated', 'Titanium', 'Riveted', 'Burnished', 'Gearbound'],
+  Neon: ['Neon', 'Glowing', 'Prismatic', 'Electric', 'Flicker', 'Laser', 'Strobe', 'Radiant', 'Lumen'],
+  Glitch: ['Corrupted', 'Fractured', 'Glitched', 'Null', 'Scrambled', 'Buffer', 'Pixel', 'Stutter', 'Bitrot'],
+  Plasma: ['Plasma', 'Fusion', 'Ionized', 'Reactor', 'Arc', 'Superheated', 'Volt', 'Charged', 'Overload'],
+  Nano: ['Nano', 'Swarm', 'Micro', 'Cellular', 'Replicating', 'Assembler', 'Mesh', 'Molecular', 'Hive'],
+  Lunar: ['Moonlit', 'Crescent', 'Silver', 'Tidebound', 'Starlit', 'Waning', 'Lunar', 'Midnight', 'Pale'],
+  Solar: ['Dawn', 'Sunfire', 'Golden', 'Radiant', 'Noon', 'Gilded', 'Daybreak', 'Solar', 'Halo'],
+  Beast: ['Feral', 'Savage', 'Fanged', 'Wild', 'Primal', 'Howling', 'Clawed', 'Pack', 'Untamed'],
+  Frost: ['Frozen', 'Glacial', 'Rimed', 'Wintry', 'Hailstone', 'Icebound', 'Snowdrift', 'Frigid', 'Crystal'],
+  Fae: ['Fey', 'Glimmer', 'Pixie', 'Enchanted', 'Dewdrop', 'Whimsy', 'Petal', 'Twilight', 'Moth'],
+  Sugar: ['Sugar', 'Candied', 'Glazed', 'Sprinkled', 'Frosted', 'Caramel', 'Honeyed', 'Syrup', 'Cotton'],
+  Choco: ['Cocoa', 'Fudge', 'Truffle', 'Ganache', 'Brownie', 'Mocha', 'Praline', 'Bittersweet', 'Molten'],
+  Mint: ['Minty', 'Peppermint', 'Cool', 'Spearmint', 'Fresh', 'Crisp', 'Breezy', 'Menthol', 'Wintergreen'],
+  Sour: ['Sour', 'Tangy', 'Zesty', 'Citrus', 'Puckered', 'Tart', 'Lemony', 'Acidic', 'Sharp'],
+  Fizz: ['Fizzy', 'Bubbly', 'Sparkling', 'Soda', 'Popping', 'Effervescent', 'Foam', 'Seltzer', 'Spritz'],
+};
+const ABIL_POOL = (k) => (k === 'healer' ? ['ally_mana', 'ally_haste', 'ally_shield', 'ally_armor', 'smite', 'self_shield'] : ['stun', 'burn', 'chill', 'shred', 'drain', 'surge', 'haste', 'guard']);
+const hitNear = (S, f, r, c, rad) => enemiesOf(S, f).filter(e => hexDist(e.r, e.c, r, c) <= rad);
+function tmpBuff(S, f, stat, v, t) { f[stat] += v; (S.tmp ||= []).push({ f, stat, v, t }); }
+function leapBehind(S, f, onLand) {
+  const foes = enemiesOf(S, f).sort((a, b) => hexDist(f.r, f.c, b.r, b.c) - hexDist(f.r, f.c, a.r, a.c));
+  for (const e of foes) {
+    const spots = neighbors(e.r, e.c).filter(([r, c]) => !S.occ[r * COLS + c]);
+    if (!spots.length) continue;
+    spots.sort((a, b) => (f.side === 0 ? a[0] - b[0] : b[0] - a[0]));
+    const spot = spots[0], dist = hexDist(f.r, f.c, spot[0], spot[1]);
+    S.occ[f.r * COLS + f.c] = null; f.fromR = f.r; f.fromC = f.c; [f.r, f.c] = spot; S.occ[f.r * COLS + f.c] = f;
+    f.moveT = f.moveDur = .45 + dist * .13; f.leap = true; f.target = e;
+    S.proj.push({ src: f, tgt: e, dmg: 0, kind: 'magic', t: -(f.moveDur - .02), dur: .01, melee: true, slash: true, color: f.color, fr: f.r, fc: f.c, onHit: () => onLand(e) });
+    return e;
+  }
+  if (live(f.target)) { onLand(f.target); return f.target; }
+  return null;
+}
+// verbs: n = name nouns, k = coefficient, text(P), run(S, f, P, t, done) -> calls done(ctx) with {foes, allies}
+const VERBS = {
+  tank: {
+    bulwark: { n: ['Bulwark', 'Aegis', 'Bastion'], text: P => `gains a ${r0(P * 1.4)} shield for 4s and deals ${r0(P * .4)} magic damage to adjacent enemies`,
+      run(S, f, P, t, done) { f.shield = Math.min(f.maxHp * 1.5, Math.max(f.shield, P * 1.4)); f.shieldT = 4; const h = hitNear(S, f, f.r, f.c, 1); h.forEach(e => dealDamage(S, f, e, P * .4, 'magic')); addFx(S, { type: 'ring', r: f.r, c: f.c, color: '#9fd3ff', dur: .5, rad: 1.6 }); done({ foes: h }); } },
+    slam: { n: ['Slam', 'Quake', 'Stomp'], text: P => `slams the ground, dealing ${r0(P * .7)} magic damage to adjacent enemies and stunning them for 1s`,
+      run(S, f, P, t, done) { const h = hitNear(S, f, f.r, f.c, 1); h.forEach(e => { dealDamage(S, f, e, P * .7, 'magic'); stun(S, e, 1); }); addFx(S, { type: 'ring', r: f.r, c: f.c, color: f.color, dur: .5, rad: 1.8 }); done({ foes: h }); } },
+    roar: { n: ['Roar', 'Challenge', 'Warcry'], text: P => `forces enemies within 2 hexes to attack it for 2.5s and gains a ${r0(P * 1)} shield`,
+      run(S, f, P, t, done) { const h = hitNear(S, f, f.r, f.c, 2); h.forEach(e => { e.target = f; e.tauntT = 2.5; e.tauntBy = f; }); f.shield = Math.min(f.maxHp * 1.5, f.shield + P); f.shieldT = 4; addFx(S, { type: 'ring', r: f.r, c: f.c, color: '#ffcf5a', dur: .6, rad: 2.6 }); done({ foes: h }); } },
+    guard: { n: ['Guard', 'Shelter', 'Ward'], text: P => `shields the lowest-health ally for ${r0(P * 1.2)} and itself for ${r0(P * .6)}`,
+      run(S, f, P, t, done) { const a = alliesOf(S, f).filter(x => x !== f).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0]; if (a) { a.shield = Math.min(a.maxHp * 1.5, a.shield + P * 1.2); a.shieldT = 4; addFx(S, { type: 'ring', r: a.r, c: a.c, color: '#9fd3ff', dur: .5, rad: 1 }); } f.shield = Math.min(f.maxHp * 1.5, f.shield + P * .6); f.shieldT = 4; done({ foes: [], allies: a ? [a] : [] }); } },
+    fortify: { n: ['Fortify', 'Stoneskin', 'Hold Fast'], text: P => `heals ${r0(P * .8)} and gains +40 armor and magic resist for 4s`,
+      run(S, f, P, t, done) { heal(S, f, P * .8); tmpBuff(S, f, 'armor', 40, 4); tmpBuff(S, f, 'mr', 40, 4); addFx(S, { type: 'ring', r: f.r, c: f.c, color: '#c9b37a', dur: .5, rad: 1.2 }); done({ foes: [] }); } },
+  },
+  bruiser: {
+    rend: { n: ['Rend', 'Cleave', 'Crush'], text: P => `strikes the target for ${r0(P * 1.6)} magic damage`,
+      run(S, f, P, t, done) { if (!live(t)) return done({ foes: [] }); dealDamage(S, f, t, P * 1.6, 'magic'); addFx(S, { type: 'slash', r: t.r, c: t.c, color: f.color, dur: .4 }); done({ foes: [t] }); } },
+    whirl: { n: ['Whirlwind', 'Spin', 'Cyclone'], text: P => `spins, dealing ${r0(P * .95)} magic damage to every adjacent enemy`,
+      run(S, f, P, t, done) { const h = hitNear(S, f, f.r, f.c, 1); h.forEach(e => dealDamage(S, f, e, P * .95, 'magic')); addFx(S, { type: 'ring', r: f.r, c: f.c, color: f.color, dur: .4, rad: 1.6 }); done({ foes: h }); } },
+    lifeblow: { n: ['Lifeblow', 'Siphon', 'Feast'], text: P => `strikes the target for ${r0(P * 1.3)} magic damage and heals for half of it`,
+      run(S, f, P, t, done) { if (!live(t)) return done({ foes: [] }); const d = dealDamage(S, f, t, P * 1.3, 'magic'); heal(S, f, (d || P * 1.3) * .5); addFx(S, { type: 'slash', r: t.r, c: t.c, color: '#ff6b8a', dur: .4 }); done({ foes: [t] }); } },
+    frenzy: { n: ['Frenzy', 'Rampage', 'Fury'], text: P => `heals ${r0(P * .5)} and gains +60% attack speed for 4s`,
+      run(S, f, P, t, done) { heal(S, f, P * .5); tmpBuff(S, f, 'asBonus', 60, 4); addText(S, f, 'Frenzy!', '#ff7a45'); done({ foes: live(t) ? [t] : [] }); } },
+    sweep: { n: ['Sweep', 'Lunge', 'Reaver'], text: P => `strikes the target and the enemy nearest to it for ${r0(P * 1.15)} magic damage each`,
+      run(S, f, P, t, done) { if (!live(t)) return done({ foes: [] }); const o = enemiesOf(S, f).filter(e => e !== t).sort((a, b) => hexDist(a.r, a.c, t.r, t.c) - hexDist(b.r, b.c, t.r, t.c))[0]; const h = [t, o].filter(Boolean); h.forEach(e => { dealDamage(S, f, e, P * 1.15, 'magic'); addFx(S, { type: 'slash', r: e.r, c: e.c, color: f.color, dur: .4 }); }); done({ foes: h }); } },
+  },
+  marksman: {
+    volley: { n: ['Volley', 'Barrage', 'Spread'], text: P => `fires bolts at the target and the 2 enemies closest to it, each dealing ${r0(P * .8)} magic damage`,
+      run(S, f, P, t, done) { if (!live(t)) return done({ foes: [] }); const h = [t, ...enemiesOf(S, f).filter(e => e !== t).sort((a, b) => hexDist(a.r, a.c, t.r, t.c) - hexDist(b.r, b.c, t.r, t.c)).slice(0, 2)]; h.forEach((e, i) => S.proj.push({ src: f, tgt: e, dmg: P * .8, kind: 'magic', t: -i * .05, dur: .25, fr: f.r, fc: f.c, color: f.color, big: true })); done({ foes: h }); } },
+    snipe: { n: ['Snipe', 'Deadeye', 'Longshot'], text: P => `takes aim and fires one heavy shot at the target for ${r0(P * 2)} magic damage`,
+      run(S, f, P, t, done) { if (!live(t)) return done({ foes: [] }); S.proj.push({ src: f, tgt: t, dmg: P * 2, kind: 'magic', t: -.15, dur: .2, fr: f.r, fc: f.c, color: f.color, big: true }); done({ foes: [t] }); } },
+    rapid: { n: ['Rapid Fire', 'Flurry', 'Salvo'], text: P => `fires 5 quick shots at the target, each dealing ${r0(P * .38)} magic damage`,
+      run(S, f, P, t, done) { if (!live(t)) return done({ foes: [] }); for (let i = 0; i < 5; i++) S.proj.push({ src: f, tgt: t, dmg: P * .38, kind: 'magic', t: -i * .09, dur: .2, fr: f.r, fc: f.c, color: f.color }); done({ foes: [t] }); } },
+    ricochet: { n: ['Ricochet', 'Bounce', 'Carom'], text: P => `fires a shot that bounces between up to 4 enemies, dealing ${r0(P * .7)} magic damage to each`,
+      run(S, f, P, t, done) { if (!live(t)) return done({ foes: [] }); const h = [t]; let cur = t; for (let i = 0; i < 3; i++) { const n = enemiesOf(S, f).filter(e => !h.includes(e)).sort((a, b) => hexDist(a.r, a.c, cur.r, cur.c) - hexDist(b.r, b.c, cur.r, cur.c))[0]; if (!n) break; h.push(n); cur = n; } h.forEach((e, i) => S.proj.push({ src: f, tgt: e, dmg: P * .7, kind: 'magic', t: -i * .12, dur: .22, fr: i ? h[i - 1].r : f.r, fc: i ? h[i - 1].c : f.c, color: f.color })); done({ foes: h }); } },
+    pierce: { n: ['Piercing Shot', 'Lance', 'Skewer'], text: P => `fires a piercing shot through the target, dealing ${r0(P * 1.1)} magic damage to it and every enemy next to it`,
+      run(S, f, P, t, done) { if (!live(t)) return done({ foes: [] }); const h = hitNear(S, f, t.r, t.c, 1); h.forEach((e, i) => S.proj.push({ src: f, tgt: e, dmg: P * 1.1 * (e === t ? 1 : .6), kind: 'magic', t: -i * .03, dur: .22, fr: f.r, fc: f.c, color: f.color, big: e === t })); done({ foes: h }); } },
+  },
+  healer: {
+    mend: { n: ['Mend', 'Remedy', 'Soothe'], text: P => `heals the lowest-health ally for ${r0(P * 1.1)} and gives them 15 mana`,
+      run(S, f, P, t, done) { const a = alliesOf(S, f).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0]; if (a) { heal(S, a, P * 1.1); if (a !== f && a.maxMana) a.mana = Math.min(a.maxMana, a.mana + 15); addFx(S, { type: 'ring', r: a.r, c: a.c, color: '#5dff9a', dur: .6, rad: 1 }); } done({ allies: a ? [a] : [] }); } },
+    bloom: { n: ['Bloom', 'Wellspring', 'Chorus'], text: P => `heals every ally within 2 hexes for ${r0(P * .55)}`,
+      run(S, f, P, t, done) { const al = alliesOf(S, f).filter(a => hexDist(a.r, a.c, f.r, f.c) <= 2); al.forEach(a => heal(S, a, P * .55)); addFx(S, { type: 'ring', r: f.r, c: f.c, color: '#5dff9a', dur: .6, rad: 2.6 }); done({ allies: al }); } },
+    twin: { n: ['Twin Mend', 'Lifelink', 'Kinship'], text: P => `heals the 2 lowest-health allies for ${r0(P * .7)} each`,
+      run(S, f, P, t, done) { const al = alliesOf(S, f).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp).slice(0, 2); al.forEach(a => { heal(S, a, P * .7); addFx(S, { type: 'ring', r: a.r, c: a.c, color: '#5dff9a', dur: .5, rad: .9 }); }); done({ allies: al }); } },
+    purify: { n: ['Purify', 'Sanctify', 'Blessing'], text: P => `heals the lowest-health ally for ${r0(P * .75)}, clears burns and bleeds, and shields them for ${r0(P * .45)}`,
+      run(S, f, P, t, done) { const a = alliesOf(S, f).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0]; if (a) { heal(S, a, P * .75); a.burnT = 0; a.bleedT = 0; a.shield = Math.min(a.maxHp * 1.5, a.shield + P * .45); a.shieldT = 4; addFx(S, { type: 'ring', r: a.r, c: a.c, color: '#fff6a8', dur: .6, rad: 1 }); } done({ allies: a ? [a] : [] }); } },
+    inspire: { n: ['Inspire', 'Anthem', 'Rally'], text: P => `heals the lowest-health ally for ${r0(P * .85)} and gives them +30% attack speed for 3s`,
+      run(S, f, P, t, done) { const a = alliesOf(S, f).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0]; if (a) { heal(S, a, P * .85); tmpBuff(S, a, 'asBonus', 30, 3); addFx(S, { type: 'ring', r: a.r, c: a.c, color: '#ffd84a', dur: .5, rad: 1 }); } done({ allies: a ? [a] : [] }); } },
+  },
+  mage: {
+    nova: { n: ['Nova', 'Burst', 'Blast'], text: P => `blasts the target and every enemy next to it for ${r0(P * 1.1)} magic damage`,
+      run(S, f, P, t, done) { if (!live(t)) return done({ foes: [] }); const h = hitNear(S, f, t.r, t.c, 1); h.forEach(e => dealDamage(S, f, e, P * 1.1, 'magic')); addFx(S, { type: 'ring', r: t.r, c: t.c, color: f.color, dur: .5, rad: 2.2 }); done({ foes: [t, ...h.filter(e => e !== t)] }); } },
+    chain: { n: ['Chain Bolt', 'Arc', 'Conduit'], text: P => `casts a bolt that chains through 3 enemies, dealing ${r0(P * 1)} magic damage to each`,
+      run(S, f, P, t, done) { if (!live(t)) return done({ foes: [] }); const h = [t]; let cur = t; for (let i = 0; i < 2; i++) { const n = enemiesOf(S, f).filter(e => !h.includes(e)).sort((a, b) => hexDist(a.r, a.c, cur.r, cur.c) - hexDist(b.r, b.c, cur.r, cur.c))[0]; if (!n) break; h.push(n); cur = n; } h.forEach(e => { dealDamage(S, f, e, P, 'magic'); addFx(S, { type: 'bolt', r: e.r, c: e.c, color: f.color, dur: .35 }); }); done({ foes: h }); } },
+    starfall: { n: ['Starfall', 'Comet', 'Smite'], text: P => `calls down a strike on the target for ${r0(P * 1.8)} magic damage and stuns it for 1s`,
+      run(S, f, P, t, done) { if (!live(t)) return done({ foes: [] }); dealDamage(S, f, t, P * 1.8, 'magic'); stun(S, t, 1); addFx(S, { type: 'ring', r: t.r, c: t.c, color: '#fff2a8', dur: .5, rad: 1.2 }); done({ foes: [t] }); } },
+    storm: { n: ['Tempest', 'Maelstrom', 'Vortex'], text: P => `unleashes a storm on every enemy within 2 hexes of the target for ${r0(P * .7)} magic damage`,
+      run(S, f, P, t, done) { if (!live(t)) return done({ foes: [] }); const h = hitNear(S, f, t.r, t.c, 2); h.forEach(e => dealDamage(S, f, e, P * .7, 'magic')); addFx(S, { type: 'ring', r: t.r, c: t.c, color: f.color, dur: .6, rad: 3.2 }); done({ foes: [t, ...h.filter(e => e !== t)] }); } },
+    ring: { n: ['Pulse', 'Shockwave', 'Halo'], text: P => `releases a pulse around itself, dealing ${r0(P * 1)} magic damage to enemies within 2 hexes and gaining a ${r0(P * .4)} shield`,
+      run(S, f, P, t, done) { const h = hitNear(S, f, f.r, f.c, 2); h.forEach(e => dealDamage(S, f, e, P, 'magic')); f.shield = Math.min(f.maxHp * 1.5, f.shield + P * .4); f.shieldT = 4; addFx(S, { type: 'ring', r: f.r, c: f.c, color: f.color, dur: .6, rad: 3 }); done({ foes: h.length ? h : (live(t) ? [t] : []) }); } },
+    drain: { n: ['Mana Rend', 'Hex', 'Null Bolt'], text: P => `burns 40 mana from the target and deals ${r0(P * 1.4)} magic damage`,
+      run(S, f, P, t, done) { if (!live(t)) return done({ foes: [] }); if (t.maxMana) t.mana = Math.max(0, t.mana - 40); dealDamage(S, f, t, P * 1.4, 'magic'); addFx(S, { type: 'bolt', r: t.r, c: t.c, color: '#9f8cff', dur: .4 }); done({ foes: [t] }); } },
+  },
+  assassin: {
+    ambush: { n: ['Ambush', 'Backstab', 'Pounce'], text: P => `leaps behind the farthest enemy (their back line) and slashes it for ${r0(P * 1.8)} magic damage`,
+      run(S, f, P, t, done) { leapBehind(S, f, e => { if (live(e)) dealDamage(S, f, e, P * 1.8, 'magic'); done({ foes: [e] }); }); } },
+    shadowstrike: { n: ['Shadow Strike', 'Nightfall', 'Dusk Blade'], text: P => `leaps behind the farthest enemy, slashing it for ${r0(P * 1.4)} magic damage and stunning it for 1s`,
+      run(S, f, P, t, done) { leapBehind(S, f, e => { if (live(e)) { dealDamage(S, f, e, P * 1.4, 'magic'); stun(S, e, 1); } done({ foes: [e] }); }); } },
+    execute: { n: ['Execute', 'Coup de Grace', 'Reap'], text: P => `leaps behind the farthest enemy and slashes it for ${r0(P * 1.4)} magic damage, doubled if it is below half health`,
+      run(S, f, P, t, done) { leapBehind(S, f, e => { if (live(e)) dealDamage(S, f, e, P * 1.4 * (e.hp < e.maxHp / 2 ? 2 : 1), 'magic'); done({ foes: [e] }); }); } },
+    fan: { n: ['Blade Fan', 'Knife Storm', 'Scatter'], text: P => `leaps behind the farthest enemy and slashes it for ${r0(P * 1.1)} magic damage, plus ${r0(P * .7)} to enemies next to it`,
+      run(S, f, P, t, done) { leapBehind(S, f, e => { if (live(e)) { dealDamage(S, f, e, P * 1.1, 'magic'); hitNear(S, f, e.r, e.c, 1).filter(x => x !== e).forEach(x => dealDamage(S, f, x, P * .7, 'magic')); } done({ foes: [e] }); }); } },
+    vanish: { n: ['Vanish', 'Phantom Step', 'Fade'], text: P => `leaps behind the farthest enemy, slashes it for ${r0(P * 1.5)} magic damage, then turns invisible for 1.5s`,
+      run(S, f, P, t, done) { leapBehind(S, f, e => { if (live(e)) dealDamage(S, f, e, P * 1.5, 'magic'); f.stealthT = Math.max(f.stealthT || 0, 1.5); done({ foes: [e] }); }); } },
+  },
+};
+const RIDERS = {
+  stun:  { t: 'stuns the first enemy hit for 0.75s', run: (S, f, P, c) => { const e = c.foes && c.foes[0]; if (live(e)) stun(S, e, .75); } },
+  burn:  { t: P => `sets the first enemy hit on fire for ${r0(P * .3)} damage over 3s`, run: (S, f, P, c) => { const e = c.foes && c.foes[0]; if (live(e)) setBurn(e, P * .1, 3, f); } },
+  chill: { t: 'chills enemies hit (-35% attack speed for 3s)', run: (S, f, P, c) => (c.foes || []).forEach(e => { if (live(e)) { e.chill = Math.max(e.chill || 0, 35); e.chillT = 3; } }) },
+  shred: { t: 'shreds 20 armor and magic resist from enemies hit', run: (S, f, P, c) => (c.foes || []).forEach(e => { if (live(e)) { e.armor = Math.max(0, e.armor - 20); e.mr = Math.max(0, e.mr - 20); } }) },
+  drain: { t: P => `heals itself for ${r0(P * .35)}`, run: (S, f, P) => heal(S, f, P * .35) },
+  surge: { t: 'refunds 20 mana', run: (S, f) => { f.mana = Math.min(f.maxMana - 1, f.mana + 20); } },
+  haste: { t: 'gains +35% attack speed for 3s', run: (S, f) => tmpBuff(S, f, 'asBonus', 35, 3) },
+  guard: { t: P => `gains a ${r0(P * .4)} shield`, run: (S, f, P) => { f.shield = Math.min(f.maxHp * 1.5, f.shield + P * .4); f.shieldT = Math.max(f.shieldT || 0, 3); } },
+  ally_mana:   { t: 'gives the healed ally 15 more mana', run: (S, f, P, c) => (c.allies || []).forEach(a => { if (a.maxMana) a.mana = Math.min(a.maxMana - 1, a.mana + 15); }) },
+  ally_haste:  { t: 'gives healed allies +25% attack speed for 3s', run: (S, f, P, c) => (c.allies || []).forEach(a => tmpBuff(S, a, 'asBonus', 25, 3)) },
+  ally_shield: { t: P => `shields healed allies for ${r0(P * .3)}`, run: (S, f, P, c) => (c.allies || []).forEach(a => { a.shield = Math.min(a.maxHp * 1.5, a.shield + P * .3); a.shieldT = Math.max(a.shieldT || 0, 3); }) },
+  ally_armor:  { t: 'gives healed allies +25 armor and magic resist for 4s', run: (S, f, P, c) => (c.allies || []).forEach(a => { tmpBuff(S, a, 'armor', 25, 4); tmpBuff(S, a, 'mr', 25, 4); }) },
+  smite:       { t: P => `zaps the nearest enemy for ${r0(P * .45)} magic damage`, run: (S, f, P) => { const e = nearestEnemy(S, f); if (e) { dealDamage(S, f, e, P * .45, 'magic'); addFx(S, { type: 'bolt', r: e.r, c: e.c, color: '#bfffd0', dur: .3 }); } } },
+  self_shield: { t: P => `shields itself for ${r0(P * .5)}`, run: (S, f, P) => { f.shield = Math.min(f.maxHp * 1.5, f.shield + P * .5); f.shieldT = Math.max(f.shieldT || 0, 3); } },
+};
+const ABIL_TUNE = {"Static": 0.72, "Cinder": 1.26, "Flare": 0.82, "Bramble": 1.3, "Wisp": 0.73, "Pyra": 1.26, "Maelstrom": 0.7, "Volt": 1.29, "Solaris": 0.8, "Leviathan": 1.3, "Verdant": 1.27, "Tempest": 0.7, "Nyx": 1.29, "Drizzle": 1.21, "Umbra": 0.75, "Thornfang": 1.27, "Magmor": 1.3, "Rivet": 0.82, "Lumen": 1.3, "Fusion": 1.25, "Vaporia": 1.2, "Zero Day": 1.24, "Supernova": 0.83, "Mainline": 0.82, "Phantom": 0.82, "Railgun": 1.2, "Mothwing": 1.3, "Dusk": 1.3, "Eclipse": 0.81, "Glacia": 1.26, "Selene": 0.83, "Phoenix": 1.2, "Sunking": 1.26, "Dawn": 0.73, "Hoot": 0.73, "Nettle": 1.21, "Goldshield": 1.26, "Lynx": 0.78, "Nightwarden": 1.25, "Gummy": 1.3, "Sprig": 1.25, "Lolli": 1.3, "Pop": 1.25, "Cola": 0.77, "Sugarplum": 1.3, "Ganache": 1.3, "Wintergreen": 0.72, "Sourpuss": 0.77, "Minty": 0.75, "Cupcake": 0.74, "Mocha": 0.75, "Citrus": 1.3, "Sparkle": 0.74, "Candyfloss": 0.76, "Pudding": 1.3};  // per-unit ability strength, from simulated fights
+let UNIT_ABIL = {};
+function assignAbilities() {
+  UNIT_ABIL = {};
+  const used = new Set(), names = new Set(), byOrigin = {};
+  const hash = s => { let h = 7; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h; };
+  for (const role of Object.keys(VERBS)) {
+    const list = UNITS.filter(u => u.role === role).sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name));
+    const verbs = Object.keys(VERBS[role]), pool = ABIL_POOL(role);
+    list.forEach((u, i) => {
+      const verb = verbs[(i + hash(u.name)) % verbs.length];
+      let ri = hash(u.name + role) % pool.length, rider = pool[ri];
+      for (let k = 0; k < pool.length && used.has(verb + rider); k++) rider = pool[(ri + k) % pool.length];
+      used.add(verb + rider);
+      let rider2 = null;
+      if (u.cost === 5) { rider2 = pool[(pool.indexOf(rider) + 3) % pool.length]; if (rider2 === rider) rider2 = null; }
+      const words = ORIGIN_WORDS[u.origin] || ['Mystic', 'Arcane', 'Grand', 'True', 'Fierce', 'Swift', 'Bright', 'Bold', 'Prime'];
+      const k0 = byOrigin[u.origin] = (byOrigin[u.origin] || 0);
+      let name; for (let k = 0; k < 30; k++) { const w = words[(k0 + k) % words.length], nn = VERBS[role][verb].n[(hash(u.name) + k) % 3]; name = `${w} ${nn}`; if (!names.has(name)) break; }
+      byOrigin[u.origin]++; names.add(name);
+      UNIT_ABIL[u.id] = { verb, rider, rider2, name };
+    });
+  }
+}
+function abilityName(id) { return (UNIT_ABIL[id] || {}).name || ROLE_ABILITY_NAME[UNIT[id].role]; }
+function abilityText(id, P) {
+  const a = UNIT_ABIL[id], role = UNIT[id].role; if (!a) return ROLE_ABILITY[role](P);
+  const k = (a.rider2 ? 1 : .88) * (ABIL_TUNE[UNIT[id].name] || 1), v = VERBS[role][a.verb], rt = r => { const x = RIDERS[r].t; return typeof x === 'function' ? x(P) : x; };
+  let s = v.text(P * k); s = s[0].toUpperCase() + s.slice(1);
+  return s + `, then ${rt(a.rider)}` + (a.rider2 ? ` and ${rt(a.rider2)}` : '') + '.';
+}
+function castUnique(S, f, P, t) {
+  const a = UNIT_ABIL[f.def.id]; if (!a) return false;
+  const k = (a.rider2 ? 1 : .88) * (ABIL_TUNE[f.def.name] || 1);
+  VERBS[f.def.role][a.verb].run(S, f, P * k, t, ctx => { ctx = ctx || {}; if (!f.alive && a.rider !== 'stun') return; RIDERS[a.rider].run(S, f, P, ctx); if (a.rider2) RIDERS[a.rider2].run(S, f, P, ctx); });
+  addText(S, f, a.name, f.color || '#fff', .9);
+  return true;
+}
+
 function cast(S, f) {
   vfx(S, { t: 'cast', f, color: f.color || '#fff', big: f.def && f.def.cost >= 4 });
   const cls = f.def.role, P = abilityPower(f.u, f.ap), t = f.target;
@@ -1544,7 +1718,7 @@ function cast(S, f) {
   if (!f.alive) return;
   addFx(S, { type: 'cast', f, color: f.color, dur: .5 });
   if (!S.headless) sfx('cast');
-  switch (cls) {
+  if (!castUnique(S, f, P, t)) switch (cls) {
     case 'tank':
       f.shield = Math.min(f.maxHp * 1.5, Math.max(f.shield, P * 1.4)); f.shieldT = 4;
       enemiesOf(S, f).filter(e => hexDist(f.r, f.c, e.r, e.c) <= 1).forEach(e => dealDamage(S, f, e, P * .4, 'magic'));
@@ -1618,6 +1792,7 @@ function simStep(S, dt) {
   const prevSec = Math.floor(S.time);
   S.time += dt;
   if (S.drum || S.bombs || S.meteors) charmTick(S);
+  if (S.tmp) S.tmp = S.tmp.filter(b => { b.t -= dt; if (b.t > 0) return true; b.f[b.stat] -= b.v; return false; });
   if (Math.floor(S.time) > prevSec) { sideTick(S, 0); sideTick(S, 1); }
   const taunters = S.time < 4 ? S.fighters.filter(x => x.alive && x.tr && x.tr.taunt) : [];
   if (S.runes) S.runes = S.runes.filter(u => { u.t -= dt; if (live(u.tgt)) { u.r = u.tgt.r; u.c = u.tgt.c; } if (u.t > 0) return true; addFx(S, { type: 'ring', r: u.r, c: u.c, color: '#b58cff', dur: .5, rad: 1.6 }); S.fighters.filter(e => e.alive && e.side !== u.src.side && hexDist(e.r, e.c, u.r, u.c) <= 1).forEach(e => dealDamage(S, u.src, e, u.dmg, 'magic')); return false; });
@@ -1639,6 +1814,7 @@ function simStep(S, dt) {
     if (f.moveT > 0) { f.moveT -= dt; if (f.moveT <= 0) { f.leap = false; f.dash = false; } continue; }
     if (f.castLock > 0) { f.castLock -= dt; continue; }
     f.atkCd -= dt;
+    if (f.tauntT > 0) { f.tauntT -= dt; if (live(f.tauntBy)) f.target = f.tauntBy; }
     if (taunters.length) { const tt = taunters.filter(x => x.side !== f.side && hexDist(x.r, x.c, f.r, f.c) <= 2).sort((a, b) => hexDist(a.r, a.c, f.r, f.c) - hexDist(b.r, b.c, f.r, f.c))[0]; if (tt) f.target = tt; }
     if (!live(f.target)) f.target = nearestEnemy(S, f);
     const t = f.target; if (!t) continue;
@@ -1651,13 +1827,13 @@ function simStep(S, dt) {
       }
     } else {
       // retarget to a closer enemy if one appeared
-      const n = nearestEnemy(S, f); if (n && n !== t && hexDist(f.r, f.c, n.r, n.c) < d) { f.target = n; }
+      const n = nearestEnemy(S, f); if (!(f.tauntT > 0) && n && n !== t && hexDist(f.r, f.c, n.r, n.c) < d) { f.target = n; }
       stepToward(S, f, f.target);
     }
   }
   for (const p of S.proj) {
     p.t += dt;
-    if (p.t >= p.dur && !p.done) { p.done = true; if (live(p.tgt)) { if (p.atk) landAttack(S, p.src, p.tgt, p.dmg, p.crit, p.noProc); else dealDamage(S, p.src, p.tgt, p.dmg, p.kind, p.crit); if (p.melee && p.src.alive) p.src.lunge = .18; if (p.slash) addFx(S, { type: 'slash', r: p.tgt.r, c: p.tgt.c, color: p.color || '#fff', dur: .4 }); } }
+    if (p.t >= p.dur && !p.done) { p.done = true; if (p.onHit) { if (p.src.alive) { p.src.lunge = .18; if (live(p.tgt)) addFx(S, { type: 'slash', r: p.tgt.r, c: p.tgt.c, color: p.color, dur: .4 }); } p.onHit(); } else if (live(p.tgt)) { if (p.atk) landAttack(S, p.src, p.tgt, p.dmg, p.crit, p.noProc); else dealDamage(S, p.src, p.tgt, p.dmg, p.kind, p.crit); if (p.melee && p.src.alive) p.src.lunge = .18; if (p.slash) addFx(S, { type: 'slash', r: p.tgt.r, c: p.tgt.c, color: p.color || '#fff', dur: .4 }); } }
   }
   S.proj = S.proj.filter(p => !p.done);
   for (const x of S.fx) x.t += dt; S.fx = S.fx.filter(x => x.t < x.dur);
@@ -2228,7 +2404,7 @@ function showUnitInfo(u, opts = {}) {
   h += `<div class="sub" style="font-size:12px">${TRAITS[d.origin].icon} ${TRAIT_SP[TRAITS[d.origin].sp].text(TRAITS[d.origin].vals[0], d.origin).replace(/^./, c => c.toUpperCase())}<br>${TRAITS[d.cls].icon} ${TRAIT_SP[TRAITS[d.cls].sp].text(TRAITS[d.cls].vals[0], d.cls).replace(/^./, c => c.toUpperCase())}</div>`;
   const hp = f ? `${r0(f.hp)}/${f.maxHp}` : r0(s.hp);
   h += `<div class="grid">${statBox('Health', hp)}${statBox('Attack', r0(f ? f.ad : s.ad))}${statBox('Atk Spd', (f ? f.as : s.as).toFixed(2))}${statBox('Range', d.range)}${statBox('Armor', r0(f ? f.armor : s.armor))}${statBox('Magic Res', r0(f ? f.mr : s.mr))}${statBox('Mana', f ? `${r0(f.mana)}/${f.maxMana}` : `${Math.min(s.start, d.mana)}/${d.mana}`)}${statBox('Ability +', r0(f ? f.ap : s.ap) + '%')}</div>`;
-  h += `<div class="ab" style="clear:both"><b>${ROLE_ABILITY_NAME[d.role]}</b> — ${ROLE_ABILITY[d.role](P)}</div>`;
+  h += `<div class="ab" style="clear:both"><b>${abilityName(d.id)}</b> — ${abilityText(d.id, P)}</div>`;
   if (u.items.length) h += '<div><b>Items</b>' + u.items.map(it => `<div class="itm">${itemIcon(it)} <b>${itemName(it)}</b> <span style="color:var(--muted)">${statsText(itemStats(it))}</span>${itemPassive(it) ? `<br><small style="color:#d8d3ee">✦ ${itemPassive(it)}</small>` : ''}</div>`).join('') + '</div>';
   if (opts.own) h += `<div class="sub" style="margin-top:6px">Trait bonuses apply in combat. Sell value: ${sellValue(u)} 🪙</div>`;
   h += '<div class="row">' + (opts.sellLoc ? `<button class="sell" id="sellBtn">Sell +${sellValue(u)}🪙</button>` : '') + (opts.own && u.items.length ? '<button id="unequipBtn">Remove items</button>' : '') + '<button id="closeBtn">Close</button></div>';
