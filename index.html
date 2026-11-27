@@ -2002,7 +2002,7 @@ function beginPlan(first) {
   }
   p.usedLock = false;
   if (state.augOffer) setTimeout(showAugPicker, 350);
-  else if (!first && state.stage >= 2 && state.round === 4 && !state.carouselDone) { state.carousel = makeCarousel(); state.carouselDone = state.stage + '-4'; save(); setTimeout(showCarousel, 400); }
+  else if (!first && state.stage >= 2 && state.round === 4 && state.carouselDone !== state.stage + '-4') { state.carousel = makeCarousel(); state.carouselDone = state.stage + '-4'; save(); setTimeout(showCarousel, 400); }
 }
 function autofill(o) {
   while (boardCount(o) < teamCap(o)) {
